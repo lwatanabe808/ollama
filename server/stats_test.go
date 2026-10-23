@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -574,11 +575,14 @@ func TestStatsDashboard(t *testing.T) {
 	s := &Server{}
 	router := gin.New()
 	router.GET("/stats", s.StatsDashboardHandler)
-	router.GET("/stats/grading.js", s.StatsGradingScriptHandler)
+	router.GET("/stats/static/:file", s.StatsDashboardFileHandler)
+	get := func(path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		return w
+	}
 
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/stats", nil))
-
+	w := get("/stats")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d", w.Code)
 	}
@@ -586,34 +590,59 @@ func TestStatsDashboard(t *testing.T) {
 		t.Errorf("content type = %q", ct)
 	}
 	csp := w.Header().Get("Content-Security-Policy")
-	if !strings.Contains(csp, "connect-src 'self'") || !strings.Contains(csp, "default-src 'none'") || !strings.Contains(csp, "script-src 'self'") {
-		t.Errorf("dashboard should only talk to and load from this server, got CSP %q", csp)
+	for _, want := range []string{"default-src 'none'", "script-src 'self';", "connect-src 'self'"} {
+		if !strings.Contains(csp, want) {
+			t.Errorf("CSP %q is missing %q", csp, want)
+		}
 	}
 	body := w.Body.String()
-	for _, want := range []string{"<title>Ollama Usage</title>", `getJSON("/api/stats"`, `"/api/stats/log?`, `id="tags-card"`, `id="tag-search"`, `id="chart-time"`, `id="cost-card"`, `<script src="/stats/grading.js">`} {
+	for _, want := range []string{"<title>Ollama Usage</title>", `id="tags-card"`, `id="tag-search"`, `id="chart-time"`, `id="cost-card"`, `id="run-btn"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page missing %q", want)
 		}
 	}
-	// The page must not load anything from outside, so it works offline.
-	// Its only script file comes from this server.
-	if n := strings.Count(body, "<script src"); n != 1 {
-		t.Errorf("page loads %d script files, want only grading.js", n)
+	// The page works offline: nothing from outside, and no inline scripts,
+	// since the CSP only allows script files from this server.
+	if strings.Contains(body, "https://") || strings.Contains(body, "<script>") {
+		t.Error("page should load nothing from outside and have no inline scripts")
 	}
-	for _, bad := range []string{"<link ", "https://"} {
-		if strings.Contains(body, bad) {
-			t.Errorf("page should not load outside files, found %q", bad)
+
+	// Every style and script the page links to is served, with the right type.
+	links := regexp.MustCompile(`(?:src|href)="(/stats/static/[^"]+)"`).FindAllStringSubmatch(body, -1)
+	if len(links) != 5 {
+		t.Errorf("page links %d static files, want 5", len(links))
+	}
+	served := map[string]string{}
+	for _, l := range links {
+		w := get(l[1])
+		if w.Code != http.StatusOK {
+			t.Errorf("%s: status %d", l[1], w.Code)
+			continue
+		}
+		wantType := "text/javascript"
+		if strings.HasSuffix(l[1], ".css") {
+			wantType = "text/css"
+		}
+		if !strings.HasPrefix(w.Header().Get("Content-Type"), wantType) {
+			t.Errorf("%s: content type %q", l[1], w.Header().Get("Content-Type"))
+		}
+		served[l[1]] = w.Body.String()
+	}
+	for file, want := range map[string]string{
+		"/stats/static/common.js":  "window.OllamaStats",
+		"/stats/static/grading.js": "OllamaGrading",
+		"/stats/static/usage.js":   `getJSON("/api/stats"`,
+		"/stats/static/tests.js":   `"/api/stats/suite-runs"`,
+	} {
+		if !strings.Contains(served[file], want) {
+			t.Errorf("%s doesn't contain %q", file, want)
 		}
 	}
 
-	// The grading script it loads is served from the same server.
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/stats/grading.js", nil))
-	if w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/javascript") {
-		t.Fatalf("grading.js: status %d, type %q", w.Code, w.Header().Get("Content-Type"))
-	}
-	if !strings.Contains(w.Body.String(), "OllamaGrading") {
-		t.Error("grading.js doesn't define OllamaGrading")
+	for _, bad := range []string{"/stats/static/nope.js", "/stats/static/..%2fstats.go"} {
+		if w := get(bad); w.Code != http.StatusNotFound {
+			t.Errorf("%s: status %d, want 404", bad, w.Code)
+		}
 	}
 }
 

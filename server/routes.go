@@ -2417,7 +2417,7 @@ func (s *Server) GenerateRoutes() (http.Handler, error) {
 	r.GET("/api/stats/log", s.StatsLogHandler)
 	r.GET("/stats", s.StatsDashboardHandler)
 	r.GET("/stats/tests", s.StatsDashboardHandler)
-	r.GET("/stats/grading.js", s.StatsGradingScriptHandler)
+	r.GET("/stats/static/:file", s.StatsDashboardFileHandler)
 	r.GET("/api/stats/suites", s.StatsSuitesHandler)
 	r.GET("/api/stats/suite-runs", s.StatsSuiteRunsHandler)
 	r.POST("/api/stats/suite-runs", s.SaveStatsSuiteRunHandler)

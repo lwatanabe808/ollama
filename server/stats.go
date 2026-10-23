@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -531,16 +531,28 @@ func statsModelName(m *Model, requested string) string {
 	return requested
 }
 
-var (
-	//go:embed stats_dashboard.html
-	statsDashboardHTML []byte
-	//go:embed stats_grading.js
-	statsGradingJS []byte
-)
+//go:embed stats_dashboard.html
+var statsDashboardHTML []byte
 
-// statsPageCSP lets the dashboard run its own code and talk only to this
-// server.
-const statsPageCSP = "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+// statsDashboardFiles are the dashboard's styles and scripts, served at
+// /stats/static/NAME. Keeping them out of the HTML keeps each one small and
+// lets the page run with no inline scripts.
+var statsDashboardFiles = map[string]struct {
+	path, contentType string
+}{
+	"dashboard.css": {"stats_dashboard.css", "text/css; charset=utf-8"},
+	"common.js":     {"stats_common.js", "text/javascript; charset=utf-8"},
+	"grading.js":    {"stats_grading.js", "text/javascript; charset=utf-8"},
+	"usage.js":      {"stats_usage.js", "text/javascript; charset=utf-8"},
+	"tests.js":      {"stats_tests.js", "text/javascript; charset=utf-8"},
+}
+
+//go:embed stats_dashboard.css stats_common.js stats_grading.js stats_usage.js stats_tests.js
+var statsDashboardFS embed.FS
+
+// statsPageCSP lets the dashboard load only its own files and talk only to
+// this server. Inline styles are still allowed, for small style attributes.
+const statsPageCSP = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 // StatsDashboardHandler serves the usage and tests dashboard. It needs no
 // outside files; it reads /api/stats and related endpoints from this server.
@@ -551,12 +563,21 @@ func (s *Server) StatsDashboardHandler(c *gin.Context) {
 	c.Data(http.StatusOK, "text/html; charset=utf-8", statsDashboardHTML)
 }
 
-// StatsGradingScriptHandler serves the answer-grading code used by the
-// dashboard's Tests page. It's a separate file so it can be tested on its own.
-func (s *Server) StatsGradingScriptHandler(c *gin.Context) {
+// StatsDashboardFileHandler serves one of the dashboard's styles or scripts.
+func (s *Server) StatsDashboardFileHandler(c *gin.Context) {
+	f, ok := statsDashboardFiles[c.Param("file")]
+	if !ok {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	bts, err := statsDashboardFS.ReadFile(f.path)
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("Cache-Control", "no-store")
-	c.Data(http.StatusOK, "text/javascript; charset=utf-8", statsGradingJS)
+	c.Data(http.StatusOK, f.contentType, bts)
 }
 
 func (s *Server) StatsHandler(c *gin.Context) {
