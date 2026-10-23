@@ -461,9 +461,10 @@ func (u *usageStats) close() error {
 	return nil
 }
 
-// observe sits between a handler's response channel and the code that writes
-// the response. It passes every item through unchanged and records the request
-// once the final chunk (Done) or an error goes by.
+// observe is the stats meter. Like a meter on a pipe, it sits between a
+// handler's response channel and the code that writes the response, passes
+// every item through unchanged, and records the request once the final chunk
+// (Done) or an error goes by.
 //
 // Only requests that reach the model are seen here. Requests rejected before
 // that (unknown model, bad request) and cloud requests aren't counted.
