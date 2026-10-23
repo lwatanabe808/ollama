@@ -51,7 +51,8 @@ const (
 
 // statsLog holds one line per finished request. It lives in memory and is
 // written to ~/.ollama/stats-log.jsonl whenever the stats are saved (every
-// minute, on shutdown, and after a reset). New lines are appended; the whole
+// minute, on shutdown, and after a reset). Saving copies lines to the file;
+// it doesn't remove them from memory. Only trim does that. New lines are appended; the whole
 // file is only rewritten after a reset or once it holds many lines that have
 // aged out.
 type statsLog struct {

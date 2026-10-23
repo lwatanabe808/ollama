@@ -78,7 +78,9 @@ You can add your own suites as JSON files in `~/.ollama/suites/`, in the same sh
 | `~/.ollama/stats-log.jsonl` | One line per request, for tags and the request log. Keeps the last 90 days, up to 50,000 requests. |
 | `~/.ollama/stats-suite-runs.jsonl` | Test results from the Tests page. Keeps the last 10 runs. |
 
-Stats are saved every minute and when Ollama stops. Files are saved in the Ollama server's `.ollama` folder, which may be a different machine if you connect to Ollama remotely.
+Ollama keeps the stats in memory while it runs, so `ollama stats` and the dashboard are fast. The files are a backup copy: every minute, and when Ollama stops, the latest stats are written to them. Saving doesn't remove anything from memory. When Ollama starts, it reads the files back in and keeps counting. Memory use stays small, since old days and old log lines are dropped as described above.
+
+Files are saved in the Ollama server's `.ollama` folder, which may be a different machine if you connect to Ollama remotely.
 
 If a file is damaged, Ollama keeps going instead of failing:
 

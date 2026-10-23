@@ -363,8 +363,9 @@ func (u *usageStats) reset() error {
 	return u.save()
 }
 
-// save writes the totals and any new log lines to disk. Saves run one at a
-// time; see saveMu.
+// save writes the totals and any new log lines to disk. The file is a backup
+// copy: the stats stay in memory, where requests keep adding to them and
+// readers get them from. Saves run one at a time; see saveMu.
 func (u *usageStats) save() error {
 	if u == nil {
 		return nil
