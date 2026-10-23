@@ -1,0 +1,416 @@
+{
+  "name": "basics",
+  "title": "Basics",
+  "description": "Standard scenarios for comparing models on your machine. Performance scenarios change one thing at a time. Fact checks grade answers separately.",
+  "performance": [
+    {
+      "id": "cold-start",
+      "title": "Cold start",
+      "group": "Loading",
+      "isolates": "Loading the model from disk",
+      "cold": true,
+      "input": "tiny",
+      "output_tokens": 16
+    },
+    {
+      "id": "input-short",
+      "title": "Short input",
+      "group": "Input size",
+      "isolates": "Reading about 15 words",
+      "input_words": 15,
+      "output_tokens": 16
+    },
+    {
+      "id": "input-medium",
+      "title": "Medium input",
+      "group": "Input size",
+      "isolates": "Reading about 400 words",
+      "input_words": 400,
+      "output_tokens": 16
+    },
+    {
+      "id": "input-long",
+      "title": "Long input",
+      "group": "Input size",
+      "isolates": "Reading about 1,500 words",
+      "input_words": 1500,
+      "output_tokens": 16
+    },
+    {
+      "id": "output-short",
+      "title": "Short output",
+      "group": "Output size",
+      "isolates": "Writing 16 tokens",
+      "input": "tiny",
+      "output_tokens": 16,
+      "output": "count"
+    },
+    {
+      "id": "output-medium",
+      "title": "Medium output",
+      "group": "Output size",
+      "isolates": "Writing 200 tokens",
+      "input": "tiny",
+      "output_tokens": 200,
+      "output": "count"
+    },
+    {
+      "id": "output-long",
+      "title": "Long output",
+      "group": "Output size",
+      "isolates": "Writing 800 tokens",
+      "input": "tiny",
+      "output_tokens": 800,
+      "output": "count"
+    },
+    {
+      "id": "reuse",
+      "title": "Prompt reuse",
+      "group": "Prompt reuse",
+      "isolates": "Sending the same 400-word input a second time",
+      "input_words": 400,
+      "output_tokens": 16,
+      "reuse": true
+    },
+    {
+      "id": "thinking-on",
+      "title": "Thinking on",
+      "group": "Thinking",
+      "isolates": "A reasoning question with thinking turned on",
+      "thinking_only": true,
+      "think": true,
+      "input": "reasoning",
+      "output_tokens": 1500
+    },
+    {
+      "id": "thinking-off",
+      "title": "Thinking off",
+      "group": "Thinking",
+      "isolates": "The same question with thinking turned off",
+      "thinking_only": true,
+      "think": false,
+      "input": "reasoning",
+      "output_tokens": 1500
+    },
+    {
+      "id": "context-50",
+      "title": "Context 50% full",
+      "group": "Context",
+      "isolates": "Reading with a 2K window half full",
+      "window": 2048,
+      "fill": 0.5,
+      "output_tokens": 16
+    },
+    {
+      "id": "context-90",
+      "title": "Context 90% full",
+      "group": "Context",
+      "isolates": "Reading with a 2K window nearly full",
+      "window": 2048,
+      "fill": 0.9,
+      "output_tokens": 16
+    },
+    {
+      "id": "context-over",
+      "title": "Context overfull",
+      "group": "Context",
+      "isolates": "Sending 125% of a 2K window; Ollama drops the oldest messages to fit",
+      "window": 2048,
+      "fill": 1.25,
+      "output_tokens": 16
+    }
+  ],
+  "fact_checks": [
+    {
+      "id": "math-discount",
+      "group": "Known answers",
+      "category": "Math",
+      "level": "easy",
+      "prompt": "A shirt costs $40 and is 25% off. What is the sale price in dollars?",
+      "answer": {
+        "type": "number",
+        "value": 30
+      }
+    },
+    {
+      "id": "math-apples",
+      "group": "Known answers",
+      "category": "Math",
+      "level": "easy",
+      "prompt": "I have 3 boxes with 12 apples in each box. I give away 7 apples. How many apples do I have left?",
+      "answer": {
+        "type": "number",
+        "value": 29
+      }
+    },
+    {
+      "id": "math-bat-ball",
+      "group": "Known answers",
+      "category": "Math",
+      "level": "hard",
+      "prompt": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost, in cents?",
+      "answer": {
+        "type": "number",
+        "value": 5
+      }
+    },
+    {
+      "id": "multistep-trains",
+      "group": "Known answers",
+      "category": "Multi-step math",
+      "level": "hard",
+      "prompt": "A train leaves City A at 9:00 AM traveling at 60 km/h toward City B, which is 300 km away. A second train leaves City B at 10:00 AM traveling toward City A at 90 km/h. A bird starts at City A at 9:00 AM and flies back and forth between the two trains at 120 km/h until they meet. At what time do the trains meet, how far from City A do they meet in km, and how many km does the bird fly in total?",
+      "answer": {
+        "type": "fields",
+        "fields": [
+          {
+            "name": "meet_time",
+            "type": "time",
+            "value": "11:36 AM"
+          },
+          {
+            "name": "distance_km",
+            "type": "number",
+            "value": 156
+          },
+          {
+            "name": "bird_km",
+            "type": "number",
+            "value": 312
+          }
+        ]
+      }
+    },
+    {
+      "id": "multistep-pencils",
+      "group": "Known answers",
+      "category": "Multi-step math",
+      "level": "medium",
+      "prompt": "Pencils cost $1 for 3. How many dollars do 18 pencils cost? And how many pencils can you buy with $10?",
+      "answer": {
+        "type": "fields",
+        "fields": [
+          {
+            "name": "cost_dollars",
+            "type": "number",
+            "value": 6
+          },
+          {
+            "name": "pencils_for_10",
+            "type": "number",
+            "value": 30
+          }
+        ]
+      }
+    },
+    {
+      "id": "logic-shortest",
+      "group": "Known answers",
+      "category": "Logic",
+      "level": "easy",
+      "prompt": "Amy is taller than Ben. Ben is taller than Cal. Who is the shortest?",
+      "answer": {
+        "type": "choice",
+        "value": "Cal",
+        "options": [
+          "Amy",
+          "Ben",
+          "Cal"
+        ]
+      }
+    },
+    {
+      "id": "logic-syllogism",
+      "group": "Known answers",
+      "category": "Logic",
+      "level": "medium",
+      "prompt": "All bloops are razzies. All razzies are lazzies. Are all bloops definitely lazzies?",
+      "answer": {
+        "type": "choice",
+        "value": "yes",
+        "options": [
+          "yes",
+          "no"
+        ]
+      }
+    },
+    {
+      "id": "logic-feathers",
+      "group": "Known answers",
+      "category": "Logic",
+      "level": "medium",
+      "prompt": "Which is heavier: a kilogram of feathers or a kilogram of steel?",
+      "answer": {
+        "type": "choice",
+        "value": "they weigh the same",
+        "options": [
+          "the feathers",
+          "the steel",
+          "they weigh the same"
+        ]
+      }
+    },
+    {
+      "id": "facts-planet",
+      "group": "Known answers",
+      "category": "Facts",
+      "level": "easy",
+      "prompt": "Which planet is closest to the sun?",
+      "answer": {
+        "type": "text",
+        "value": "Mercury"
+      }
+    },
+    {
+      "id": "facts-gold",
+      "group": "Known answers",
+      "category": "Facts",
+      "level": "medium",
+      "prompt": "What is the chemical symbol for gold?",
+      "answer": {
+        "type": "text",
+        "value": "Au"
+      }
+    },
+    {
+      "id": "facts-continents",
+      "group": "Known answers",
+      "category": "Facts",
+      "level": "easy",
+      "prompt": "How many continents are there on Earth, using the most common count?",
+      "answer": {
+        "type": "number",
+        "value": 7
+      }
+    },
+    {
+      "id": "comprehension-car",
+      "group": "Known answers",
+      "category": "Comprehension",
+      "level": "easy",
+      "prompt": "Read this: \"Maya parked her red car outside the bakery at noon. Her brother's blue truck was already there.\" What color was Maya's car?",
+      "answer": {
+        "type": "choice",
+        "value": "red",
+        "options": [
+          "red",
+          "blue"
+        ]
+      }
+    },
+    {
+      "id": "comprehension-arrival",
+      "group": "Known answers",
+      "category": "Comprehension",
+      "level": "medium",
+      "prompt": "Read this: \"Tom left home at 3:00 PM. The drive took 45 minutes, and he stopped for gas for 15 minutes on the way.\" What time did Tom arrive?",
+      "answer": {
+        "type": "time",
+        "value": "4:00 PM"
+      }
+    },
+    {
+      "id": "code-reverse",
+      "group": "Known answers",
+      "category": "Code",
+      "level": "easy",
+      "prompt": "Write a Python function named reverse_string that takes a string and returns it reversed. Reply with only the code.",
+      "check": {
+        "type": "code",
+        "all": [
+          "def reverse_string"
+        ],
+        "any": [
+          "[::-1]",
+          "reversed(",
+          ".reverse("
+        ]
+      }
+    },
+    {
+      "id": "code-even",
+      "group": "Known answers",
+      "category": "Code",
+      "level": "easy",
+      "prompt": "Write a Python function named is_even that takes an integer n and returns True if n is even. Reply with only the code.",
+      "check": {
+        "type": "code",
+        "all": [
+          "def is_even"
+        ],
+        "any": [
+          "% 2",
+          "%2",
+          "& 1",
+          "&1"
+        ]
+      }
+    },
+    {
+      "id": "length-three-words",
+      "group": "Following instructions",
+      "category": "Length",
+      "level": "medium",
+      "prompt": "Describe the ocean in exactly 3 words. Reply with only those 3 words.",
+      "check": {
+        "type": "word_count",
+        "value": 3
+      }
+    },
+    {
+      "id": "format-json",
+      "group": "Following instructions",
+      "category": "Format",
+      "level": "easy",
+      "prompt": "List 3 fruits as JSON in this exact shape: {\"fruits\": [\"name\", \"name\", \"name\"]}. Reply with only the JSON.",
+      "check": {
+        "type": "json_list",
+        "key": "fruits",
+        "length": 3
+      }
+    },
+    {
+      "id": "required-word",
+      "group": "Following instructions",
+      "category": "Required word",
+      "level": "easy",
+      "prompt": "Write one sentence about a garden that includes the word \"violet\".",
+      "check": {
+        "type": "contains",
+        "value": "violet"
+      }
+    },
+    {
+      "id": "forbidden-letter",
+      "group": "Following instructions",
+      "category": "Forbidden letter",
+      "level": "hard",
+      "prompt": "Write one sentence about a cat without using the letter e anywhere.",
+      "check": {
+        "type": "excludes_letter",
+        "value": "e"
+      }
+    },
+    {
+      "id": "case-uppercase",
+      "group": "Following instructions",
+      "category": "Case and style",
+      "level": "medium",
+      "prompt": "Write one short sentence about the moon, entirely in capital letters.",
+      "check": {
+        "type": "uppercase"
+      }
+    },
+    {
+      "id": "only-answer",
+      "group": "Following instructions",
+      "category": "Only the answer",
+      "level": "easy",
+      "prompt": "What is 7 times 8? Reply with only the number, nothing else.",
+      "check": {
+        "type": "exact",
+        "value": "56"
+      }
+    }
+  ]
+}

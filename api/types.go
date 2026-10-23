@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -130,6 +132,11 @@ type GenerateRequest struct {
 	// each with an associated log probability. Only applies when Logprobs is true.
 	// Valid values are 0-20. Default is 0 (only return the selected token's logprob).
 	TopLogprobs int `json:"top_logprobs,omitempty"`
+
+	// Tag labels this request in the usage stats log, so it can be looked up
+	// later with /api/stats/log?tag=NAME. Apps can also send the X-Ollama-Tag
+	// header instead. It has no effect on the answer.
+	Tag string `json:"tag,omitempty"`
 }
 
 // ChatRequest describes a request sent by [Client.Chat].
@@ -182,6 +189,11 @@ type ChatRequest struct {
 	// each with an associated log probability. Only applies when Logprobs is true.
 	// Valid values are 0-20. Default is 0 (only return the selected token's logprob).
 	TopLogprobs int `json:"top_logprobs,omitempty"`
+
+	// Tag labels this request in the usage stats log, so it can be looked up
+	// later with /api/stats/log?tag=NAME. Apps can also send the X-Ollama-Tag
+	// header instead. It has no effect on the answer.
+	Tag string `json:"tag,omitempty"`
 }
 
 type Tools []Tool
@@ -951,6 +963,267 @@ type ProcessModelResponse struct {
 	SizeVRAM      int64        `json:"size_vram"`
 	ContextLength int          `json:"context_length"`
 	Runner        string       `json:"runner,omitempty"`
+}
+
+// ModelStats holds usage totals for one model, as returned by /api/stats.
+// Durations are in nanoseconds, like the timings in [Metrics].
+type ModelStats struct {
+	Model          string        `json:"model"`
+	Requests       int64         `json:"requests"`
+	Errors         int64         `json:"errors"`
+	PromptTokens   int64         `json:"prompt_tokens"`
+	OutputTokens   int64         `json:"output_tokens"`
+	PromptDuration time.Duration `json:"prompt_duration"`
+	OutputDuration time.Duration `json:"output_duration"`
+	TotalDuration  time.Duration `json:"total_duration"`
+	LoadDuration   time.Duration `json:"load_duration"`
+	LastUsed       time.Time     `json:"last_used"`
+	// PromptCachedTokens is how many prompt tokens were reused from earlier
+	// work instead of being read again, which makes answers start sooner.
+	PromptCachedTokens int64 `json:"prompt_cached_tokens"`
+	// MaxContextUsed is how many tokens the fullest request used, counting
+	// both the prompt (including earlier chat messages) and the answer.
+	// "Fullest" means closest to its context window.
+	MaxContextUsed int64 `json:"max_context_used"`
+	// MaxContextWindow is the context window that fullest request ran in.
+	// Zero means unknown; use ContextLength instead.
+	MaxContextWindow int64 `json:"max_context_window,omitempty"`
+	// ContextLength is the model's context window size at its last request.
+	ContextLength int64 `json:"context_length,omitempty"`
+	// MemorySize is how much memory (RAM plus GPU memory) the model needed
+	// when it was last loaded, in bytes. It depends on the context size.
+	MemorySize int64 `json:"memory_size,omitempty"`
+	// MemoryVRAM is how much of MemorySize was in GPU memory at the last
+	// request, in bytes. The rest ran on the CPU. Nil means unknown.
+	MemoryVRAM *int64 `json:"memory_vram,omitempty"`
+	// Last holds the numbers from the most recent successful request, so it
+	// can be compared to the averages.
+	Last *RequestStats `json:"last,omitempty"`
+}
+
+// RequestStats holds the numbers from a single request.
+type RequestStats struct {
+	At time.Time `json:"at"`
+	// ContextLength, MemorySize, and MemoryVRAM describe the loaded model
+	// at the time of this request. Zero or nil means unknown.
+	ContextLength      int64         `json:"context_length,omitempty"`
+	MemorySize         int64         `json:"memory_size,omitempty"`
+	MemoryVRAM         *int64        `json:"memory_vram,omitempty"`
+	PromptTokens       int64         `json:"prompt_tokens"`
+	PromptCachedTokens int64         `json:"prompt_cached_tokens,omitempty"`
+	OutputTokens       int64         `json:"output_tokens"`
+	LoadDuration       time.Duration `json:"load_duration,omitempty"`
+	PromptDuration     time.Duration `json:"prompt_duration,omitempty"`
+	OutputDuration     time.Duration `json:"output_duration"`
+	TotalDuration      time.Duration `json:"total_duration"`
+}
+
+// PromptNewTokens is how many prompt tokens were read fresh, not reused.
+// PromptTokens = PromptNewTokens + PromptCachedTokens.
+func (r RequestStats) PromptNewTokens() int64 { return newTokens(r.PromptTokens, r.PromptCachedTokens) }
+
+func newTokens(total, cached int64) int64 { return max(0, total-cached) }
+
+func reusedShare(cached, total int64) (float64, bool) {
+	if total <= 0 {
+		return 0, false
+	}
+	return min(1, float64(cached)/float64(total)), true
+}
+
+// TokensPerSecond is how fast the model wrote this answer.
+func (r RequestStats) TokensPerSecond() float64 {
+	return tokensPerSecond(r.OutputTokens, r.OutputDuration)
+}
+
+func tokensPerSecond(tokens int64, d time.Duration) float64 {
+	if d <= 0 {
+		return 0
+	}
+	return float64(tokens) / d.Seconds()
+}
+
+// Wait is how long it took before the first word of this answer appeared.
+func (r RequestStats) Wait() time.Duration {
+	if r.TotalDuration <= r.OutputDuration {
+		return 0
+	}
+	return r.TotalDuration - r.OutputDuration
+}
+
+// ContextUsed is how many tokens this request used: the prompt plus the answer.
+func (r RequestStats) ContextUsed() int64 {
+	return r.PromptTokens + r.OutputTokens
+}
+
+// TokensPerSecond is the average speed at which the model wrote its answers.
+func (m ModelStats) TokensPerSecond() float64 {
+	return tokensPerSecond(m.OutputTokens, m.OutputDuration)
+}
+
+// AvgWait is the average time before the first word of an answer appeared.
+// It covers loading the model and reading the prompt: everything except writing.
+func (m ModelStats) AvgWait() time.Duration {
+	ok := m.Requests - m.Errors
+	if ok <= 0 || m.TotalDuration <= m.OutputDuration {
+		return 0
+	}
+	return (m.TotalDuration - m.OutputDuration) / time.Duration(ok)
+}
+
+// AvgLoad is the average time spent loading the model before a request
+// could start. It is near zero when the model was already in memory.
+func (m ModelStats) AvgLoad() time.Duration { return m.avg(m.LoadDuration) }
+
+// AvgPromptRead is the average time spent reading the prompt.
+func (m ModelStats) AvgPromptRead() time.Duration { return m.avg(m.PromptDuration) }
+
+// AvgWriting is the average time spent writing the answer.
+func (m ModelStats) AvgWriting() time.Duration { return m.avg(m.OutputDuration) }
+
+func (m ModelStats) avg(total time.Duration) time.Duration {
+	ok := m.Requests - m.Errors
+	if ok <= 0 || total <= 0 {
+		return 0
+	}
+	return total / time.Duration(ok)
+}
+
+// MaxContextFill returns the fullest request's token count and the window
+// it ran in, so the two can be shown together like "1.9K of 2K".
+func (m ModelStats) MaxContextFill() (used, window int64) {
+	if m.MaxContextWindow > 0 {
+		return m.MaxContextUsed, m.MaxContextWindow
+	}
+	return m.MaxContextUsed, m.ContextLength
+}
+
+// TrackContextFill updates the fullest request if used tokens in window
+// are a bigger share than the current fullest one. With no window known,
+// it falls back to comparing token counts.
+func (m *ModelStats) TrackContextFill(used, window int64) {
+	if used <= 0 {
+		return
+	}
+	curUsed, curWindow := m.MaxContextFill()
+	if window > 0 && curWindow > 0 {
+		if float64(used)/float64(window) > float64(curUsed)/float64(curWindow) {
+			m.MaxContextUsed, m.MaxContextWindow = used, window
+		}
+		return
+	}
+	if used > curUsed {
+		m.MaxContextUsed, m.MaxContextWindow = used, window
+	}
+}
+
+// PromptNewTokens is how many prompt tokens were read fresh, not reused.
+func (m ModelStats) PromptNewTokens() int64 { return newTokens(m.PromptTokens, m.PromptCachedTokens) }
+
+// PromptReused is the share of all prompt tokens reused from earlier work,
+// from 0 to 1. ok is false when there were no prompt tokens.
+func (m ModelStats) PromptReused() (share float64, ok bool) {
+	return reusedShare(m.PromptCachedTokens, m.PromptTokens)
+}
+
+// GPUShare is the share of the model that was in GPU memory at its last
+// request, from 0 (all CPU) to 1 (all GPU). ok is false when unknown.
+func (m ModelStats) GPUShare() (share float64, ok bool) {
+	if m.MemoryVRAM == nil || m.MemorySize <= 0 || *m.MemoryVRAM > m.MemorySize {
+		return 0, false
+	}
+	return float64(*m.MemoryVRAM) / float64(m.MemorySize), true
+}
+
+// AvgDuration is the average time a successful request took from start to finish.
+func (m ModelStats) AvgDuration() time.Duration { return m.avg(m.TotalDuration) }
+
+// StatsResponse is the response from [Client.Stats].
+type StatsResponse struct {
+	// Since is when stats tracking started, or when stats were last reset.
+	Since time.Time `json:"since"`
+	// Today is the server's local date, in YYYY-MM-DD form.
+	Today string `json:"today"`
+	// TodayModels holds totals for requests made today.
+	TodayModels []ModelStats `json:"today_models"`
+	// AllTimeModels holds totals since stats tracking started.
+	AllTimeModels []ModelStats `json:"all_time_models"`
+	// Active is the number of chat and generate requests running right now.
+	Active int64 `json:"active"`
+	// Days holds totals for each recent day that had requests, oldest first.
+	// Days with no requests are left out.
+	Days []DayStats `json:"days"`
+	// Tags lists the most recently used tags, newest first, up to 100.
+	// Older tags can still be looked up by name with /api/stats/log.
+	Tags []TagStats `json:"tags"`
+	// TagsTotal is how many different tags are in the log, which may be
+	// more than the number listed in Tags.
+	TagsTotal int `json:"tags_total"`
+	// Disabled is true when usage stats are turned off with OLLAMA_NOSTATS.
+	Disabled bool `json:"disabled,omitempty"`
+}
+
+// TagStats summarizes the logged requests that share one tag.
+type TagStats struct {
+	Tag      string    `json:"tag"`
+	Requests int64     `json:"requests"`
+	Errors   int64     `json:"errors"`
+	LastUsed time.Time `json:"last_used"`
+}
+
+// RequestLogEntry is one request in the usage stats log. It holds numbers
+// only, never the prompt or the answer.
+type RequestLogEntry struct {
+	RequestStats
+	Model string `json:"model"`
+	Tag   string `json:"tag,omitempty"`
+	Error bool   `json:"error,omitempty"`
+	// Test is true for requests sent by a test tool with the
+	// X-Ollama-Stats: test header. They're logged, so they can be looked
+	// up by tag, but left out of usage totals and the tag list.
+	Test bool `json:"test,omitempty"`
+}
+
+// StatsLogResponse is the response from [Client.StatsLog].
+type StatsLogResponse struct {
+	// Tag is the tag that was looked up. Empty means all requests.
+	Tag string `json:"tag,omitempty"`
+	// Total is how many logged requests matched, which may be more than
+	// the number returned in Requests.
+	Total int `json:"total"`
+	// Models holds totals for the matching requests, one entry per model.
+	Models []ModelStats `json:"models"`
+	// Requests holds the matching requests, newest first.
+	Requests []RequestLogEntry `json:"requests"`
+	// Disabled is true when usage stats are turned off with OLLAMA_NOSTATS.
+	Disabled bool `json:"disabled,omitempty"`
+}
+
+// TagMaxLength is the most characters a request tag can have.
+const TagMaxLength = 64
+
+// ValidateTag checks a request tag: letters, numbers, spaces, and
+// - _ . : / @, up to TagMaxLength characters. These are safe to show in a
+// terminal or a web page and to put in a URL.
+func ValidateTag(tag string) error {
+	if utf8.RuneCountInString(tag) > TagMaxLength {
+		return fmt.Errorf("tag is too long: use %d characters or fewer", TagMaxLength)
+	}
+	for _, r := range tag {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune(" -_.:/@", r) {
+			return fmt.Errorf("tag %q has a character that isn't allowed: use letters, numbers, spaces, and - _ . : / @", tag)
+		}
+	}
+	return nil
+}
+
+// DayStats holds totals across all models for one day.
+type DayStats struct {
+	// Date is the server's local date, in YYYY-MM-DD form.
+	Date         string `json:"date"`
+	Requests     int64  `json:"requests"`
+	Errors       int64  `json:"errors"`
+	OutputTokens int64  `json:"output_tokens"`
 }
 
 type TokenResponse struct {

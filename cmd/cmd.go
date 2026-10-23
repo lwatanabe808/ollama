@@ -890,6 +890,15 @@ func RunHandler(cmd *cobra.Command, args []string) error {
 	}
 	opts.HideThinking = hidethinking
 
+	if f := cmd.Flags().Lookup("tag"); f != nil {
+		opts.Tag = strings.TrimSpace(f.Value.String())
+	}
+	if opts.Tag != "" {
+		if err := api.ValidateTag(opts.Tag); err != nil {
+			return fmt.Errorf("--tag: %w", err)
+		}
+	}
+
 	keepAlive, err := cmd.Flags().GetString("keepalive")
 	if err != nil {
 		return err
@@ -978,6 +987,9 @@ func RunHandler(cmd *cobra.Command, args []string) error {
 
 	// If it's an embedding model, handle embedding generation
 	if isEmbeddingModel {
+		if opts.Tag != "" {
+			fmt.Fprintln(os.Stderr, "Note: --tag is ignored for embedding models, since their requests aren't tracked in usage stats yet.")
+		}
 		if opts.Prompt == "" {
 			return errors.New("embedding models require input text. Usage: ollama run " + name + " \"your text here\"")
 		}
@@ -1818,6 +1830,7 @@ type runOptions struct {
 	ShowConnect    bool
 	Decision       bool
 	Questions      *api.SystemOneQuestions
+	Tag            string
 }
 
 func (r runOptions) Copy() runOptions {
@@ -1872,6 +1885,7 @@ func (r runOptions) Copy() runOptions {
 		ShowConnect:    r.ShowConnect,
 		Decision:       r.Decision,
 		Questions:      r.Questions,
+		Tag:            r.Tag,
 	}
 }
 
@@ -2059,6 +2073,7 @@ func chat(cmd *cobra.Command, opts runOptions) (*api.Message, error) {
 		Format:   json.RawMessage(opts.Format),
 		Options:  opts.Options,
 		Think:    opts.Think,
+		Tag:      opts.Tag,
 	}
 
 	if opts.KeepAlive != nil {
@@ -2196,6 +2211,7 @@ func generate(cmd *cobra.Command, opts runOptions) error {
 		Options:   opts.Options,
 		KeepAlive: opts.KeepAlive,
 		Think:     opts.Think,
+		Tag:       opts.Tag,
 	}
 
 	if err := client.Generate(ctx, &request, fn); err != nil {
@@ -2586,6 +2602,7 @@ func NewCLI() *cobra.Command {
 	}
 
 	runCmd.Flags().String("keepalive", "", "Duration to keep a model loaded (e.g. 5m)")
+	runCmd.Flags().String("tag", "", "Label these requests so you can find them later with 'ollama stats --tag'")
 	runCmd.Flags().Bool("verbose", false, "Show timings for response")
 	runCmd.Flags().Bool("insecure", false, "Use an insecure registry")
 	runCmd.Flags().Bool("nowordwrap", false, "Don't wrap words to the next line automatically")
@@ -2688,6 +2705,30 @@ func NewCLI() *cobra.Command {
 		PreRunE: checkServerHeartbeat,
 		RunE:    ListRunningHandler,
 	}
+	statsCmd := &cobra.Command{
+		Use:   "stats",
+		Short: "Show usage stats for each model",
+		Long: `Show how often each model is used, how fast it answers, and how many
+tokens it reads and writes. Stats are shown for today and for all time.
+
+Stats are saved to ~/.ollama/stats.json on the machine running the Ollama
+server, so they survive restarts.
+For charts, open the dashboard with 'ollama stats --web'.
+
+To track a group of requests, tag them and look them up later:
+  ollama run llama3.2 "Explain clouds" --tag cloud-test
+  ollama stats --tag cloud-test
+Only counts and timings are saved, never prompts or answers.`,
+		Args:    cobra.NoArgs,
+		PreRunE: checkServerHeartbeat,
+		RunE:    StatsHandler,
+	}
+	statsCmd.Flags().Bool("reset", false, "Clear all saved stats")
+	statsCmd.Flags().Bool("web", false, "Open the stats dashboard in your browser")
+	statsCmd.Flags().String("tag", "", "Show totals and the requests for this tag")
+	statsCmd.Flags().Int("limit", 20, "How many tagged requests to list with --tag (up to 1000)")
+	statsCmd.MarkFlagsMutuallyExclusive("reset", "web", "tag")
+
 	copyCmd := &cobra.Command{
 		Use:     "cp SOURCE DESTINATION",
 		Short:   "Copy a model",
@@ -2739,6 +2780,7 @@ func NewCLI() *cobra.Command {
 		pushCmd,
 		listCmd,
 		psCmd,
+		statsCmd,
 		copyCmd,
 		deleteCmd,
 		serveCmd,
@@ -2759,6 +2801,7 @@ func NewCLI() *cobra.Command {
 				envVars["OLLAMA_NUM_PARALLEL"],
 				envVars["OLLAMA_NO_CLOUD"],
 				envVars["OLLAMA_NOPRUNE"],
+				envVars["OLLAMA_NOSTATS"],
 				envVars["OLLAMA_ORIGINS"],
 				envVars["OLLAMA_SCHED_SPREAD"],
 				envVars["OLLAMA_FLASH_ATTENTION"],
@@ -2789,6 +2832,7 @@ func NewCLI() *cobra.Command {
 		logoutCmd,
 		listCmd,
 		psCmd,
+		statsCmd,
 		copyCmd,
 		deleteCmd,
 		runnerCmd,

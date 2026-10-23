@@ -141,6 +141,7 @@
               "/cli",
               "/modelfile",
               "/context-length",
+              "/usage-stats",
               "/linux",
               "/macos",
               "/windows",

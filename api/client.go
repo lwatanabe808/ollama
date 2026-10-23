@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ollama/ollama/auth"
@@ -113,7 +114,10 @@ func (c *Client) do(ctx context.Context, method, path string, reqData, respData 
 		reqBody = bytes.NewReader(data)
 	}
 
+	// JoinPath would escape a "?", so keep any query string separate.
+	path, rawQuery, _ := strings.Cut(path, "?")
 	requestURL := c.base.JoinPath(path)
+	requestURL.RawQuery = rawQuery
 
 	var token string
 	if envconfig.UseAuth() || c.base.Hostname() == "ollama.com" {
@@ -389,6 +393,42 @@ func (c *Client) ListRunning(ctx context.Context) (*ProcessResponse, error) {
 		return nil, err
 	}
 	return &lr, nil
+}
+
+// Stats returns usage totals for each model, for today and since tracking began.
+func (c *Client) Stats(ctx context.Context) (*StatsResponse, error) {
+	var sr StatsResponse
+	if err := c.do(ctx, http.MethodGet, "/api/stats", nil, &sr); err != nil {
+		return nil, err
+	}
+	return &sr, nil
+}
+
+// StatsLog returns logged requests with the given tag, newest first, along
+// with totals for them. An empty tag returns all requests. limit caps how
+// many requests are returned; 0 uses the server's default.
+func (c *Client) StatsLog(ctx context.Context, tag string, limit int) (*StatsLogResponse, error) {
+	q := url.Values{}
+	if tag != "" {
+		q.Set("tag", tag)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	path := "/api/stats/log"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	var sr StatsLogResponse
+	if err := c.do(ctx, http.MethodGet, path, nil, &sr); err != nil {
+		return nil, err
+	}
+	return &sr, nil
+}
+
+// ResetStats clears all saved usage totals on the server.
+func (c *Client) ResetStats(ctx context.Context) error {
+	return c.do(ctx, http.MethodDelete, "/api/stats", nil, nil)
 }
 
 // Copy copies a model - creating a model with another name from an existing

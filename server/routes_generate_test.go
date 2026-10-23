@@ -64,6 +64,7 @@ type mockRunner struct {
 	TemplateFn    func(context.Context, llm.ChatRequest) (string, error)
 	DetokenizeFn  func(context.Context, []int) (string, error)
 	contextLength int
+	memorySize    uint64
 }
 
 func (m *mockRunner) Completion(ctx context.Context, r llm.CompletionRequest, fn func(r llm.CompletionResponse)) error {
@@ -110,6 +111,8 @@ func (mockRunner) Tokenize(_ context.Context, s string) (tokens []int, err error
 func (mockRunner) Ping(_ context.Context) error { return nil }
 
 func (m mockRunner) ContextLength() int { return m.contextLength }
+
+func (m mockRunner) MemorySize() (total, vram uint64) { return m.memorySize, m.memorySize }
 
 func TestLlamaServerConfigForModelSplitPaths(t *testing.T) {
 	m := &Model{

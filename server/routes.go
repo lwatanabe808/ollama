@@ -113,6 +113,7 @@ type Server struct {
 	defaultNumCtx int
 	requestLogger *inferenceRequestLogger
 	modelCaches   *modelCaches
+	stats         *usageStats
 }
 
 func init() {
@@ -326,6 +327,10 @@ func (s *Server) GenerateHandler(c *gin.Context) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+	}
+
+	if !s.takeStatsTag(c, &req.Tag) {
+		return
 	}
 
 	if req.TopLogprobs < 0 || req.TopLogprobs > 20 {
@@ -731,6 +736,7 @@ func (s *Server) GenerateHandler(c *gin.Context) {
 		}
 	}
 
+	statsInfo := statsInfoFor(c, r)
 	ch := make(chan any)
 	go func() {
 		// TODO (jmorganca): avoid building the response twice both here and below
@@ -841,12 +847,15 @@ func (s *Server) GenerateHandler(c *gin.Context) {
 		}
 	}()
 
+	// Use a new variable: the goroutine above still sends on ch.
+	observed := s.stats.observe(c.Request.Context(), statsModelName(m, req.Model), statsInfo, ch)
+
 	if req.Stream != nil && !*req.Stream {
 		var r api.GenerateResponse
 		var allLogprobs []api.Logprob
 		var sbThinking strings.Builder
 		var sbContent strings.Builder
-		for rr := range ch {
+		for rr := range observed {
 			switch t := rr.(type) {
 			case api.GenerateResponse:
 				sbThinking.WriteString(t.Thinking)
@@ -883,7 +892,7 @@ func (s *Server) GenerateHandler(c *gin.Context) {
 		return
 	}
 
-	streamResponse(c, ch)
+	streamResponse(c, observed)
 }
 
 func (s *Server) systemOneLlamaServer(c *gin.Context, m *Model, req decision.Request, body []byte) {
@@ -2340,6 +2349,8 @@ func (s *Server) GenerateRoutes() (http.Handler, error) {
 		"User-Agent",
 		"Accept",
 		"X-Requested-With",
+		statsTagHeader,
+		statsKindHeader,
 
 		// OpenAI compatibility headers
 		"OpenAI-Beta",
@@ -2402,6 +2413,15 @@ func (s *Server) GenerateRoutes() (http.Handler, error) {
 
 	// Inference
 	r.GET("/api/ps", s.PsHandler)
+	r.GET("/api/stats", s.StatsHandler)
+	r.GET("/api/stats/log", s.StatsLogHandler)
+	r.GET("/stats", s.StatsDashboardHandler)
+	r.GET("/stats/tests", s.StatsDashboardHandler)
+	r.GET("/stats/grading.js", s.StatsGradingScriptHandler)
+	r.GET("/api/stats/suites", s.StatsSuitesHandler)
+	r.GET("/api/stats/suite-runs", s.StatsSuiteRunsHandler)
+	r.POST("/api/stats/suite-runs", s.SaveStatsSuiteRunHandler)
+	r.DELETE("/api/stats", s.ResetStatsHandler)
 	r.POST("/api/generate", s.withInferenceRequestLogging("/api/generate", s.GenerateHandler)...)
 	r.POST("/api/chat", s.withInferenceRequestLogging("/api/chat", s.ChatHandler)...)
 	r.POST("/api/embed", s.EmbedHandler)
@@ -2492,6 +2512,15 @@ func Serve(ln net.Listener) error {
 		return err
 	}
 
+	if envconfig.NoStats() {
+		slog.Info("usage stats are turned off (OLLAMA_NOSTATS)")
+	} else if statsPath, err := defaultStatsPath(); err != nil {
+		slog.Warn("usage stats disabled, no home directory", "error", err)
+	} else {
+		s.stats = newUsageStats(statsPath)
+		go s.stats.run()
+	}
+
 	if useClient2 {
 		slog.Warn("OLLAMA_EXPERIMENT=client2 is no longer available. Please remove this environment.")
 	}
@@ -2528,6 +2557,9 @@ func Serve(ln net.Listener) error {
 	go func() {
 		<-signals
 		srvr.Close()
+		if err := s.stats.close(); err != nil {
+			slog.Warn("could not save usage stats on shutdown", "error", err)
+		}
 		schedDone()
 		sched.unloadAllRunners()
 		done()
@@ -3010,6 +3042,10 @@ func (s *Server) ChatHandler(c *gin.Context) {
 		}
 	}
 
+	if !s.takeStatsTag(c, &req.Tag) {
+		return
+	}
+
 	if req.TopLogprobs < 0 || req.TopLogprobs > 20 {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "top_logprobs must be between 0 and 20"})
 		return
@@ -3300,6 +3336,7 @@ func (s *Server) ChatHandler(c *gin.Context) {
 		toolParser = tools.NewParser(m.Template.Template, req.Tools)
 	}
 
+	statsInfo := statsInfoFor(c, r)
 	ch := make(chan any)
 	go func() {
 		defer close(ch)
@@ -3426,7 +3463,9 @@ func (s *Server) ChatHandler(c *gin.Context) {
 		}
 	}()
 
-	writeChatResponse(c, req, ch)
+	// Use a new variable: the goroutine above still sends on ch.
+	observed := s.stats.observe(c.Request.Context(), statsModelName(m, req.Model), statsInfo, ch)
+	writeChatResponse(c, req, observed)
 }
 
 func prepareNativeChatRequest(ctx context.Context, m *Model, r llm.LlamaServer, opts *api.Options, nativeReq llm.ChatRequest, truncate bool) (llm.ChatRequest, error) {
@@ -3481,6 +3520,7 @@ func (s *Server) handleNativeChat(c *gin.Context, req api.ChatRequest, m *Model,
 		return
 	}
 
+	statsInfo := statsInfoFor(c, r)
 	ch := make(chan any)
 	go func() {
 		defer close(ch)
@@ -3524,7 +3564,9 @@ func (s *Server) handleNativeChat(c *gin.Context, req api.ChatRequest, m *Model,
 		}
 	}()
 
-	writeChatResponse(c, req, ch)
+	// Use a new variable: the goroutine above still sends on ch.
+	observed := s.stats.observe(c.Request.Context(), statsModelName(m, req.Model), statsInfo, ch)
+	writeChatResponse(c, req, observed)
 }
 
 func truncateNativeChatMessages(ctx context.Context, m *Model, r llm.LlamaServer, opts *api.Options, req llm.ChatRequest, truncate bool) ([]api.Message, error) {

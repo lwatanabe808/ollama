@@ -1,0 +1,1692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ollama Usage</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #6b6a65;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --accent: #2a78d6;
+    --accent-strong: #1f63b8;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --good: #006300;
+    --warning-ink: #8a5a00;
+    --critical: #c22f2f;
+    --score-good: #0ca30c;
+    --score-mid: #fab219;
+    --score-low: #d03b3b;
+    --tooltip-bg: #0b0b0b;
+    --tooltip-ink: #f0efec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted: #a3a29b;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --accent: #3987e5;
+      --accent-strong: #1f63b8;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --good: #0ca30c;
+      --warning-ink: #fab219;
+      --critical: #e66767;
+      --tooltip-bg: #f0efec;
+      --tooltip-ink: #0b0b0b;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--text-primary);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 1120px; margin: 0 auto; padding: 32px 16px 64px; }
+  [hidden] { display: none !important; }
+  code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--page); padding: 2px 6px; border-radius: 4px; }
+
+  .topnav { display: flex; gap: 4px; margin-bottom: 20px; }
+  .topnav a { color: var(--text-secondary); text-decoration: none; padding: 6px 12px; border-radius: 8px; font-weight: 500; }
+  .topnav a:hover { background: var(--surface); }
+  .topnav a[aria-current="page"] { background: var(--surface); color: var(--text-primary); box-shadow: 0 0 0 1px var(--border); }
+
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .subtitle { color: var(--text-secondary); margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+  .live { display: inline-flex; align-items: center; gap: 6px; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+  .live-dot.on { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 20%, transparent); }
+  .error { color: var(--critical); }
+
+  a, .link-btn, .tag-link { color: var(--accent); }
+  .link-btn, .tag-link { font: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+  .tag-link { font-weight: 500; }
+  .tag-link:hover { text-decoration: underline; }
+  :is(a, button, input, select, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .card h2 { font-size: 14px; font-weight: 600; margin: 0; }
+  .card .hint { color: var(--text-muted); font-size: 13px; margin: 2px 0 14px; }
+  .full { margin-bottom: 12px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+
+  .segmented { display: inline-flex; padding: 3px; border-radius: 9px; background: var(--surface); border: 1px solid var(--border); }
+  .segmented button { font: inherit; color: var(--text-secondary); background: none; border: 0; cursor: pointer; padding: 6px 14px; border-radius: 6px; }
+  .segmented button[aria-pressed="true"] { background: var(--page); color: var(--text-primary); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
+
+  .tag-banner { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .tag-banner .pill { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+  .tag-banner .pill span { font-weight: 400; color: var(--text-secondary); }
+  .tag-search { display: flex; gap: 8px; margin-bottom: 4px; }
+  .tag-search input { font: inherit; flex: 1; min-width: 0; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--page); color: var(--text-primary); }
+  .tags-more { color: var(--text-muted); font-size: 12px; margin-top: 10px; }
+  .field-error { color: var(--critical); font-size: 12px; min-height: 16px; margin-top: 4px; }
+
+  .tiles { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .tile .label, .cost .label { color: var(--text-secondary); font-size: 13px; }
+  .tile .value, .cost .value { font-size: 28px; font-weight: 600; margin-top: 6px; letter-spacing: -0.01em; }
+  .tile.hero .value { font-size: 48px; line-height: 1.05; }
+  .tile .note, .cost .note { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+  .cost { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-end; justify-content: space-between; }
+  .cost .note { max-width: 460px; }
+  .prices { display: flex; flex-wrap: wrap; gap: 12px; }
+  .prices label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+  .prices .field { display: flex; align-items: center; gap: 4px; }
+  .prices input { font: inherit; width: 96px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--page); color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .prices input[aria-invalid="true"] { border-color: var(--critical); }
+
+  svg { display: block; width: 100%; overflow: visible; }
+  svg text { font: 11px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+  svg .val { fill: var(--text-secondary); font-size: 12px; }
+  svg .name { fill: var(--text-primary); font-size: 12px; }
+  /* Marks and labels let the mouse through to the hover area under them. */
+  .chart-bar, .seg, svg text { pointer-events: none; }
+  .chart-bar { fill: var(--series-1); }
+  .chart-bar.hover { fill: color-mix(in srgb, var(--series-1) 80%, var(--text-primary)); }
+  .seg-1 { fill: var(--series-1); } .seg-2 { fill: var(--series-2); } .seg-3 { fill: var(--series-3); }
+  .seg.hover { opacity: 0.8; }
+  .hit { fill: transparent; }
+  .legend, .score-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0; list-style: none; color: var(--text-secondary); font-size: 12px; }
+  .legend { margin: 0 0 12px; }
+  .score-legend { margin: 10px 0 0; }
+  .legend li, .score-legend li { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i, .score-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .tooltip {
+    position: fixed; pointer-events: none; z-index: 10; opacity: 0; transition: opacity 80ms;
+    background: var(--tooltip-bg); color: var(--tooltip-ink); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.4; white-space: nowrap;
+  }
+  .tooltip strong { display: block; font-weight: 600; margin-bottom: 2px; }
+
+  .table-wrap { overflow-x: auto; margin: 0 -20px; padding: 0 20px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-weight: 500; color: var(--text-muted); font-size: 12px; padding: 0 12px 8px 0; white-space: nowrap; }
+  td { padding: 10px 12px 10px 0; border-top: 1px solid var(--grid); white-space: nowrap; }
+  td:first-child { font-weight: 500; }
+  td .avg { color: var(--text-muted); }
+  td .sub { display: block; color: var(--text-muted); font-size: 12px; }
+  td.best .main { font-weight: 600; }
+  .status-error, .fail { color: var(--critical); font-weight: 600; }
+  .pass { color: var(--good); font-weight: 600; }
+  .skip { color: var(--text-muted); }
+  .score-good { background: color-mix(in srgb, var(--score-good) 16%, transparent); }
+  .score-mid { background: color-mix(in srgb, var(--score-mid) 22%, transparent); }
+  .score-low { background: color-mix(in srgb, var(--score-low) 16%, transparent); }
+  .notes { margin: 12px 0 0; padding: 0; list-style: none; }
+  .notes li { color: var(--text-secondary); padding: 10px 12px; border-radius: 8px; background: var(--page); margin-top: 8px; }
+  .notes li strong { color: var(--warning-ink); }
+
+  fieldset { border: 0; margin: 0 0 16px; padding: 0; min-width: 0; }
+  legend { font-weight: 600; font-size: 13px; margin-bottom: 8px; padding: 0; }
+  .checks { display: flex; flex-wrap: wrap; gap: 8px; }
+  .check { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--page); cursor: pointer; user-select: none; }
+  .check input { margin: 0; accent-color: var(--accent); }
+  .check .meta { color: var(--text-muted); font-size: 12px; }
+  .badge { font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; }
+  .run-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn { font: inherit; font-weight: 600; border-radius: 9px; padding: 9px 18px; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text-primary); }
+  .btn.primary { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .select { font: inherit; color: var(--text-primary); background: var(--page); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; max-width: 100%; }
+  .progress { margin-top: 16px; }
+  .progress-track { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
+  .progress-track i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 4px; transition: width 200ms; }
+  .progress p { color: var(--text-secondary); font-size: 13px; margin: 8px 0 0; }
+  .results-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+  .group-title { font-size: 13px; font-weight: 600; margin: 20px 0 4px; }
+  td details summary { cursor: pointer; list-style: none; }
+  td details summary::-webkit-details-marker { display: none; }
+  td details p { white-space: normal; overflow-wrap: break-word; min-width: 140px; color: var(--text-secondary); font-size: 12px; margin: 6px 0 0; }
+  /* Tests tables fit without sideways scrolling: the long text column wraps
+     and takes the spare width, while short values stay on one line. */
+  #tests-view td { vertical-align: top; }
+  .prompt-cell { color: var(--text-secondary); white-space: normal; overflow-wrap: break-word; width: 32%; min-width: 160px; max-width: 320px; }
+  /* Results tables use fixed column widths, so opening an answer only makes
+     its row taller instead of shifting the columns. */
+  #tests-view table.fixed { table-layout: fixed; }
+  #tests-view table.fixed td, #tests-view table.fixed th { white-space: normal; overflow-wrap: break-word; }
+  #tests-view table.fixed .prompt-cell { width: auto; min-width: 0; max-width: none; }
+  .about summary { cursor: pointer; font-weight: 600; margin-top: 12px; }
+
+  footer { color: var(--text-muted); font-size: 12px; margin-top: 20px; }
+
+  @media (max-width: 860px) {
+    .tiles { grid-template-columns: 1fr 1fr; }
+    .tile.hero { grid-column: 1 / -1; }
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <nav class="topnav" aria-label="Stats pages">
+    <a href="/stats" id="nav-usage">Usage</a>
+    <a href="/stats/tests" id="nav-tests">Tests</a>
+  </nav>
+
+  <div id="usage-view">
+    <header>
+      <div>
+        <h1>Ollama usage</h1>
+        <p class="subtitle">
+          <span id="since">Loading…</span>
+          <span class="live"><span class="live-dot" id="live-dot"></span><span id="live-text" aria-live="polite">Connecting</span></span>
+        </p>
+      </div>
+      <div class="segmented" id="range-control" role="group" aria-label="Time range">
+        <button type="button" data-range="today" aria-pressed="false">Today</button>
+        <button type="button" data-range="all" aria-pressed="true">All time</button>
+      </div>
+    </header>
+
+    <div class="card tag-banner" id="tag-banner" hidden>
+      <div class="pill">Tag: <strong id="tag-name"></strong> <span id="tag-count"></span></div>
+      <button type="button" class="link-btn" id="tag-clear">Show all requests</button>
+    </div>
+
+    <div class="card full" id="stats-off" hidden>
+      <h2>Usage stats are turned off</h2>
+      <p class="hint">This Ollama server was started with OLLAMA_NOSTATS, so nothing is tracked or saved. Unset it and restart Ollama to turn stats back on.</p>
+    </div>
+
+    <div id="content">
+      <section class="tiles">
+        <div class="card tile hero"><div class="label">Requests</div><div class="value" id="t-requests">–</div><div class="note" id="t-requests-note"></div></div>
+        <div class="card tile"><div class="label">Total tokens written</div><div class="value" id="t-tokens">–</div><div class="note" id="t-tokens-note"></div></div>
+        <div class="card tile"><div class="label">Avg wait before first word</div><div class="value" id="t-wait">–</div><div class="note">Includes loading the model</div></div>
+        <div class="card tile"><div class="label">Errors</div><div class="value" id="t-errors">–</div><div class="note" id="t-errors-note"></div></div>
+      </section>
+
+      <section class="card full cost" id="cost-card">
+        <div>
+          <div class="label">If you had paid for these tokens</div>
+          <div class="value" id="cost-value">–</div>
+          <div class="note" id="cost-note"></div>
+        </div>
+        <div>
+          <div class="prices">
+            <label>Price per 1M tokens in
+              <span class="field">$<input id="price-in" type="number" min="0" step="0.01" inputmode="decimal" aria-describedby="price-error"></span>
+            </label>
+            <label>Price per 1M tokens out
+              <span class="field">$<input id="price-out" type="number" min="0" step="0.01" inputmode="decimal" aria-describedby="price-error"></span>
+            </label>
+          </div>
+          <div class="field-error" id="price-error" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="card full" id="days-card">
+        <h2>Requests per day</h2>
+        <p class="hint">Last 30 days, all models</p>
+        <div id="chart-days"></div>
+      </section>
+
+      <section class="card full" id="tags-card">
+        <h2>Tags</h2>
+        <p class="hint">Tag requests to group and look them up later, for example: ollama run llama3.2 "Hi" --tag demo</p>
+        <form class="tag-search" id="tag-form" role="search">
+          <input id="tag-search" type="search" placeholder="Search tags" aria-label="Search tags" autocomplete="off">
+        </form>
+        <div class="table-wrap"><table id="tags-table"></table></div>
+        <p class="field-error" id="tag-error" role="alert"></p>
+        <p class="tags-more" id="tags-more"></p>
+      </section>
+
+      <section class="grid-2">
+        <div class="card">
+          <h2>Average speed by model</h2>
+          <p class="hint">Total tokens written ÷ total time spent writing, across this model's requests. Doesn't include loading the model or reading the prompt. Higher is faster.</p>
+          <div id="chart-speed"></div>
+        </div>
+        <div class="card">
+          <h2>Average wait before first word</h2>
+          <p class="hint">Average seconds until the answer starts. Lower is better.</p>
+          <div id="chart-wait"></div>
+        </div>
+      </section>
+
+      <section class="card full" id="time-card">
+        <h2>Where the time goes</h2>
+        <p class="hint">Average seconds per request, split into loading the model, reading the prompt, and writing the answer</p>
+        <ul class="legend" aria-hidden="true">
+          <li><i style="background: var(--series-1)"></i>Loading model</li>
+          <li><i style="background: var(--series-2)"></i>Reading prompt</li>
+          <li><i style="background: var(--series-3)"></i>Writing answer</li>
+        </ul>
+        <div id="chart-time"></div>
+        <div class="table-wrap" style="margin-top: 12px"><table id="time-table"></table></div>
+      </section>
+
+      <section class="card full">
+        <h2>Models</h2>
+        <p class="hint" id="models-hint"></p>
+        <div class="table-wrap"><table id="models-table"></table></div>
+        <ul class="notes" id="notes"></ul>
+      </section>
+
+      <section class="card full" id="log-card" hidden>
+        <h2>Requests</h2>
+        <p class="hint" id="log-hint"></p>
+        <div class="table-wrap"><table id="log-table"></table></div>
+      </section>
+
+      <section class="card full" id="last-card">
+        <h2>Last request</h2>
+        <p class="hint">Each model's most recent answer, next to its all-time average</p>
+        <div class="table-wrap"><table id="last-table"></table></div>
+      </section>
+    </div>
+
+    <footer>
+      Updates every few seconds while this page is open. Only counts and timings are saved, never prompts or answers.
+      Same data as <code>ollama stats</code>.
+    </footer>
+  </div>
+
+  <div id="tests-view" hidden>
+    <header>
+      <div>
+        <h1>Model tests</h1>
+        <p class="subtitle" id="suite-desc">Loading…</p>
+      </div>
+    </header>
+
+    <section class="card full">
+      <h2>Run tests</h2>
+      <p class="hint">Runs on this computer through the normal chat API, tagged so the results also show on the Usage page. Close heavy apps for steadier numbers.</p>
+      <fieldset id="suite-field" hidden>
+        <legend>Suite</legend>
+        <select class="select" id="suite-select" aria-label="Test suite"></select>
+      </fieldset>
+      <fieldset>
+        <legend>Models</legend>
+        <div class="checks" id="model-list"></div>
+      </fieldset>
+      <fieldset>
+        <legend>What to run</legend>
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="run-perf" checked> Performance <span class="meta" id="perf-count"></span></label>
+          <label class="check"><input type="checkbox" id="run-facts" checked> Fact checks <span class="meta" id="facts-count"></span></label>
+          <label class="check">Runs per scenario
+            <select class="select" id="repeats" aria-label="Runs per performance scenario">
+              <option value="1">1</option><option value="3">3 (averaged)</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+      <div class="run-row">
+        <button type="button" class="btn primary" id="run-btn">Run tests</button>
+        <button type="button" class="btn" id="stop-btn" hidden>Stop</button>
+      </div>
+      <p class="field-error" id="run-error" role="alert"></p>
+      <div class="progress" id="progress" hidden>
+        <div class="progress-track" role="progressbar" aria-label="Test progress" id="progress-bar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="progress-fill"></i></div>
+        <p id="progress-text" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="card full" id="results-card" hidden>
+      <div class="results-head">
+        <h2>Results</h2>
+        <select class="select" id="run-select" aria-label="Saved test runs"></select>
+      </div>
+      <p class="hint" id="run-meta"></p>
+      <div class="segmented" id="results-tabs" role="group" aria-label="Result type">
+        <button type="button" data-tab="perf" aria-pressed="true">Performance</button>
+        <button type="button" data-tab="facts" aria-pressed="false">Fact checks</button>
+      </div>
+      <div id="perf-results"></div>
+      <div id="facts-results" hidden></div>
+    </section>
+
+    <section class="card full about">
+      <h2>What's in this suite</h2>
+      <p class="hint">Performance scenarios change one thing at a time and don't grade answers. Fact checks grade answers and are reported separately, so speed and correctness never mix. Known-answer checks make the model reply in a fixed JSON shape, so grading is exact.</p>
+      <details><summary>Performance scenarios</summary><div class="table-wrap"><table id="about-perf"></table></div></details>
+      <details><summary>Fact checks</summary><div class="table-wrap"><table id="about-facts"></table></div></details>
+      <p class="hint" style="margin-top: 12px">Add your own suite as a JSON file in <code>~/.ollama/suites/</code>, using the same shape as the built-in one at <code>/api/stats/suites</code>.</p>
+    </section>
+
+    <footer>Results are saved on this computer. Test prompts and answers are stored with each run; your own chats never are.</footer>
+  </div>
+</main>
+<div class="tooltip" id="tooltip" role="tooltip"></div>
+
+<script src="/stats/grading.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var REFRESH_MS = 3000;
+  var REQUEST_TIMEOUT_MS = 10000;
+  var DAYS_SHOWN = 30;
+  var CONTEXT_WARN_AT = 0.9;
+  var TAGS_SHOWN = 10;
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  // Grading lives in stats_grading.js, so it can be tested on its own.
+  var Grading = window.OllamaGrading;
+
+  // =====================================================================
+  // Shared helpers
+  // =====================================================================
+
+  // ---------- formatting (matches `ollama stats`) ----------
+
+  function compact(n) {
+    n = Number(n) || 0;
+    if (n >= 1e9) return oneDecimal(n / 1e9) + "B";
+    if (n >= 1e6) return oneDecimal(n / 1e6) + "M";
+    if (n >= 1e3) return Math.round(n / 1e3) + "K";
+    return String(Math.round(n));
+  }
+  function oneDecimal(x) { return x % 1 === 0 ? String(x) : x.toFixed(1); }
+  function full(n) { return (Number(n) || 0).toLocaleString(); }
+  function truncate(s, n) { s = String(s); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+
+  // Durations from the API are nanoseconds.
+  function seconds(ns) { return (Number(ns) || 0) / 1e9; }
+  function dur(ns) {
+    var s = seconds(ns);
+    if (s <= 0) return "–";
+    if (s < 0.1) return Math.round(s * 1000) + "ms";
+    if (s < 60) return s.toFixed(1) + "s";
+    return Math.floor(s / 60) + "m " + Math.floor(s % 60) + "s";
+  }
+  // Writing speed, from tokens and nanoseconds.
+  function speedOf(tokens, ns) { var s = seconds(ns); return s > 0 ? tokens / s : 0; }
+  function speedText(tokens, ns) { var v = speedOf(tokens, ns); return v > 0 ? v.toFixed(1) + " tok/s" : "–"; }
+  // The wait before the first word: everything except writing.
+  function waitOf(total, output) { return Math.max(0, (total || 0) - (output || 0)); }
+  // Same rules as format.HumanBytes in Go, so both views show the same size.
+  function bytes(b) {
+    b = Number(b) || 0;
+    if (b <= 0) return "–";
+    var units = ["B", "KB", "MB", "GB", "TB"], i = 0;
+    while (b >= 1000 && i < units.length - 1) { b /= 1000; i++; }
+    if (i === 0) return b + " B";
+    if (b >= 10 || b === Math.trunc(b)) return Math.trunc(b) + " " + units[i];
+    return b.toFixed(1) + " " + units[i];
+  }
+  function ctxSize(n) { return n >= 1024 && n % 1024 === 0 ? (n / 1024) + "K" : compact(n); }
+  function ago(iso) {
+    if (!iso) return "–";
+    var s = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (s < 5) return "just now";
+    if (s < 60) return Math.round(s) + "s ago";
+    if (s < 3600) return Math.round(s / 60) + " min ago";
+    if (s < 86400) return Math.round(s / 3600) + " hr ago";
+    return Math.round(s / 86400) + " days ago";
+  }
+  function when(iso, withSeconds) {
+    var opts = { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
+    if (withSeconds) opts.second = "2-digit";
+    return new Date(iso).toLocaleString(undefined, opts);
+  }
+  function pct(x) { return x == null ? "–" : Math.round(x * 100) + "%"; }
+  // Total tokens in = newly read + reused.
+  function newRead(prompt, cached) { return Math.max(0, (prompt || 0) - (cached || 0)); }
+  function reused(cached, prompt) { return prompt > 0 ? Math.min(1, (cached || 0) / prompt) : null; }
+
+  // ---------- DOM (text only, never HTML from data) ----------
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, attrs, text) {
+    var e = document.createElement(tag);
+    for (var k in attrs || {}) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function svgEl(tag, attrs, text) {
+    var e = document.createElementNS(SVG_NS, tag);
+    for (var k in attrs || {}) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function row(cells, header) {
+    var tr = el("tr");
+    cells.forEach(function (c) {
+      var td = el(header ? "th" : "td");
+      if (c.avg != null) {
+        td.appendChild(document.createTextNode(c.text + " "));
+        td.appendChild(el("span", { class: "avg" }, "(avg " + c.avg + ")"));
+      } else {
+        td.textContent = c.text;
+      }
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+  function headRow(names) { return row(names.map(function (h) { return { text: h }; }), true); }
+  // Fills a table from a header and rows, replacing what was there.
+  function fillTable(table, names, rows) {
+    table.replaceChildren();
+    if (!rows.length) return;
+    var thead = el("thead"), tbody = el("tbody");
+    thead.appendChild(headRow(names));
+    rows.forEach(function (r) { tbody.appendChild(r); });
+    table.append(thead, tbody);
+  }
+  function wrapTable(table) { var w = el("div", { class: "table-wrap" }); w.appendChild(table); return w; }
+
+  // ---------- talking to Ollama ----------
+
+  // httpError carries the server's own message, so pages can show it.
+  function httpError(status, data, text) {
+    var e = new Error((data && data.error) || text || ("server returned " + status));
+    e.status = status;
+    return e;
+  }
+  function readJSON(r) {
+    return r.text().then(function (t) {
+      var data = null;
+      try { data = t ? JSON.parse(t) : {}; } catch (e) { /* not JSON */ }
+      if (!r.ok) throw httpError(r.status, data, t);
+      return data || {};
+    });
+  }
+  function getJSON(url, signal) { return fetch(url, { cache: "no-store", signal: signal }).then(readJSON); }
+
+  // =====================================================================
+  // Usage page
+  // =====================================================================
+
+  var range = "all";
+  try { range = localStorage.getItem("ollama-stats-range") === "today" ? "today" : "all"; } catch (e) { /* storage blocked */ }
+  var last = null;
+  var tagLog = null;
+
+  // The selected tag lives in the address, like #tag=cloud-test, so a tag
+  // view can be bookmarked or shared. Invalid tags are ignored.
+  function tagFromHash() {
+    var m = location.hash.match(/^#tag=(.+)$/);
+    if (!m) return "";
+    var t = "";
+    try { t = decodeURIComponent(m[1]); } catch (e) { return ""; }
+    return Grading.isValidTag(t) ? t : "";
+  }
+  var tag = tagFromHash();
+
+  // ---------- per-model math (matches api.ModelStats methods) ----------
+
+  function ok(m) { return Math.max(0, m.requests - m.errors); }
+  function avgOf(m, total) { var n = ok(m); return n > 0 ? (total || 0) / n : 0; }
+  function tps(m) { return speedOf(m.output_tokens, m.output_duration); }
+  function avgWait(m) { return avgOf(m, waitOf(m.total_duration, m.output_duration)); }
+  function avgTime(m) { return avgOf(m, m.total_duration); }
+  // The window the fullest request ran in, or the current one if unknown.
+  function fillWindow(m) { return m.max_context_window || m.context_length || 0; }
+  // Same wording as `ollama ps`.
+  function processor(m) {
+    if (m.memory_vram == null || !(m.memory_size > 0) || m.memory_vram > m.memory_size) return "–";
+    var gpu = m.memory_vram / m.memory_size;
+    if (gpu >= 1) return "100% GPU";
+    if (gpu <= 0) return "100% CPU";
+    var cpu = Math.round((1 - gpu) * 100);
+    return cpu + "%/" + (100 - cpu) + "% CPU/GPU";
+  }
+
+  // ---------- cost estimate ----------
+
+  var prices = { input: 1, output: 4 };
+  try {
+    var savedPrices = JSON.parse(localStorage.getItem("ollama-stats-prices") || "null");
+    if (savedPrices && savedPrices.input >= 0 && savedPrices.output >= 0) prices = savedPrices;
+  } catch (e) { /* storage blocked or bad value */ }
+  function money(x) {
+    if (x > 0 && x < 0.01) return "under $0.01";
+    return "$" + x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // ---------- charts ----------
+
+  // A bar with a 4px rounded data end and a square base.
+  function barPath(x, y, w, h, horizontal) {
+    var r = Math.min(4, horizontal ? w : h, horizontal ? h / 2 : w / 2);
+    if (w <= 0 || h <= 0) return "";
+    if (horizontal) {
+      return "M" + x + "," + y + "H" + (x + w - r) + "Q" + (x + w) + "," + y + " " + (x + w) + "," + (y + r) +
+        "V" + (y + h - r) + "Q" + (x + w) + "," + (y + h) + " " + (x + w - r) + "," + (y + h) + "H" + x + "Z";
+    }
+    return "M" + x + "," + (y + h) + "V" + (y + r) + "Q" + x + "," + y + " " + (x + r) + "," + y +
+      "H" + (x + w - r) + "Q" + (x + w) + "," + y + " " + (x + w) + "," + (y + r) + "V" + (y + h) + "Z";
+  }
+  function niceMax(v) {
+    if (v <= 0) return 1;
+    var p = Math.pow(10, Math.floor(Math.log10(v))), f = v / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+  }
+
+  var tip = $("tooltip");
+  function showTip(evt, title, lines) {
+    tip.replaceChildren(el("strong", null, title));
+    lines.forEach(function (l) { tip.appendChild(el("div", null, l)); });
+    tip.style.opacity = "1";
+    var pad = 12, r = tip.getBoundingClientRect();
+    var x = evt.clientX + pad, y = evt.clientY - r.height - pad;
+    if (x + r.width > window.innerWidth - 8) x = evt.clientX - r.width - pad;
+    if (y < 8) y = evt.clientY + pad;
+    tip.style.left = x + "px";
+    tip.style.top = y + "px";
+  }
+  function hideTip() { tip.style.opacity = "0"; }
+  function hover(hit, mark, title, lines) {
+    hit.addEventListener("mousemove", function (e) { mark.classList.add("hover"); showTip(e, title, lines); });
+    hit.addEventListener("mouseleave", function () { mark.classList.remove("hover"); hideTip(); });
+  }
+
+  function lastDays(today, saved) {
+    var byDate = {};
+    (saved || []).forEach(function (d) { byDate[d.date] = d; });
+    var parts = today.split("-").map(Number);
+    var out = [];
+    for (var i = DAYS_SHOWN - 1; i >= 0; i--) {
+      var d = new Date(parts[0], parts[1] - 1, parts[2] - i);
+      var key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      out.push({ date: d, stats: byDate[key] || { requests: 0, errors: 0, output_tokens: 0 } });
+    }
+    return out;
+  }
+
+  function drawDays(st) {
+    var box = $("chart-days");
+    var days = lastDays(st.today, st.days);
+    var W = Math.max(box.clientWidth, 280), H = 180;
+    var left = 36, right = 4, top = 8, bottom = 22;
+    var plotW = W - left - right, plotH = H - top - bottom;
+    var max = niceMax(Math.max.apply(null, days.map(function (d) { return d.stats.requests; })));
+    var slot = plotW / days.length, bw = Math.min(24, Math.max(2, slot - 2));
+    var busy = days.filter(function (d) { return d.stats.requests > 0; }).map(function (d) {
+      return d.date.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + ": " + d.stats.requests;
+    });
+
+    var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, height: H, role: "img",
+      "aria-label": "Requests per day for the last " + DAYS_SHOWN + " days. " + (busy.length ? busy.join(", ") : "No requests.") });
+    [0, 0.5, 1].forEach(function (f) {
+      var y = top + plotH - f * plotH;
+      svg.appendChild(svgEl("line", { x1: left, x2: W - right, y1: y, y2: y, stroke: f === 0 ? "var(--baseline)" : "var(--grid)", "stroke-width": 1 }));
+      svg.appendChild(svgEl("text", { x: left - 8, y: y + 4, "text-anchor": "end" }, compact(max * f)));
+    });
+    days.forEach(function (d, i) {
+      var x = left + i * slot + (slot - bw) / 2;
+      var h = d.stats.requests / max * plotH;
+      var hit = svgEl("rect", { class: "hit", x: left + i * slot, y: top, width: slot, height: plotH });
+      var bar = svgEl("path", { class: "chart-bar", d: barPath(x, top + plotH - h, bw, h, false) });
+      hover(hit, bar, d.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }), [
+        full(d.stats.requests) + " requests",
+        full(d.stats.output_tokens) + " tokens written",
+        d.stats.errors ? full(d.stats.errors) + " errors" : "No errors"
+      ]);
+      svg.appendChild(hit);
+      svg.appendChild(bar);
+      if (i === 0 || i === days.length - 1 || i === Math.floor(days.length / 2)) {
+        svg.appendChild(svgEl("text", { x: x + bw / 2, y: H - 4, "text-anchor": i === 0 ? "start" : i === days.length - 1 ? "end" : "middle" },
+          i === days.length - 1 ? "Today" : d.date.toLocaleDateString(undefined, { month: "short", day: "numeric" })));
+      }
+    });
+    box.replaceChildren(svg);
+  }
+
+  // Horizontal bars, one per model, with the value at the tip.
+  function drawModelBars(boxId, title, models, valueOf, labelOf, tipLines, emptyText) {
+    var box = $(boxId);
+    var rows = models.filter(function (m) { return valueOf(m) > 0; }).sort(function (a, b) { return valueOf(b) - valueOf(a); });
+    if (!rows.length) { box.replaceChildren(el("p", { class: "hint" }, emptyText)); return; }
+
+    var W = Math.max(box.clientWidth, 260), rowH = 34, bh = 18;
+    var nameW = Math.min(170, Math.max(90, W * 0.36)), valueW = 76;
+    var plotW = W - nameW - valueW, H = rows.length * rowH;
+    var max = Math.max.apply(null, rows.map(valueOf));
+    var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, height: H, role: "img",
+      "aria-label": title + ": " + rows.map(function (m) { return m.model + " " + labelOf(m); }).join(", ") });
+    svg.appendChild(svgEl("line", { x1: nameW, x2: nameW, y1: 0, y2: H, stroke: "var(--baseline)", "stroke-width": 1 }));
+    rows.forEach(function (m, i) {
+      var y = i * rowH, cy = y + rowH / 2;
+      var w = Math.max(2, valueOf(m) / max * plotW);
+      var hit = svgEl("rect", { class: "hit", x: 0, y: y, width: W, height: rowH });
+      var bar = svgEl("path", { class: "chart-bar", d: barPath(nameW, cy - bh / 2, w, bh, true) });
+      hover(hit, bar, m.model, tipLines(m));
+      svg.appendChild(hit);
+      svg.appendChild(svgEl("text", { class: "name", x: 0, y: cy + 4 }, truncate(m.model, 22)));
+      svg.appendChild(bar);
+      svg.appendChild(svgEl("text", { class: "val", x: nameW + w + 8, y: cy + 4 }, labelOf(m)));
+    });
+    box.replaceChildren(svg);
+  }
+
+  var TIME_PARTS = [
+    { key: "load_duration", name: "Loading model", cls: "seg-1" },
+    { key: "prompt_duration", name: "Reading prompt", cls: "seg-2" },
+    { key: "output_duration", name: "Writing answer", cls: "seg-3" }
+  ];
+
+  // Stacked bars: loading, reading, writing. A 2px gap separates segments.
+  function drawTimeChart(models) {
+    var box = $("chart-time");
+    var rows = models.filter(function (m) { return avgTime(m) > 0; }).sort(function (a, b) { return avgTime(b) - avgTime(a); });
+    if (!rows.length) { box.replaceChildren(el("p", { class: "hint" }, "No finished requests yet.")); return; }
+
+    var W = Math.max(box.clientWidth, 260), rowH = 34, bh = 18, gap = 2;
+    var nameW = Math.min(170, Math.max(90, W * 0.3)), valueW = 60;
+    var plotW = W - nameW - valueW, H = rows.length * rowH;
+    var max = Math.max.apply(null, rows.map(function (m) {
+      return TIME_PARTS.reduce(function (sum, p) { return sum + avgOf(m, m[p.key]); }, 0);
+    }));
+    var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, height: H, role: "img",
+      "aria-label": "Average time per request by model, split into loading, reading, and writing. Values are in the table below." });
+    svg.appendChild(svgEl("line", { x1: nameW, x2: nameW, y1: 0, y2: H, stroke: "var(--baseline)", "stroke-width": 1 }));
+    rows.forEach(function (m, i) {
+      var y = i * rowH, cy = y + rowH / 2, x = nameW, sum = 0;
+      svg.appendChild(svgEl("text", { class: "name", x: 0, y: cy + 4 }, truncate(m.model, 22)));
+      var visible = TIME_PARTS.filter(function (p) { return avgOf(m, m[p.key]) > 0; });
+      visible.forEach(function (p, j) {
+        var v = avgOf(m, m[p.key]), isLast = j === visible.length - 1;
+        sum += v;
+        var w = Math.max(1, v / max * plotW - (isLast ? 0 : gap));
+        var hit = svgEl("rect", { class: "hit", x: x, y: y, width: w + gap, height: rowH });
+        var seg = isLast
+          ? svgEl("path", { class: "seg " + p.cls, d: barPath(x, cy - bh / 2, w, bh, true) })
+          : svgEl("rect", { class: "seg " + p.cls, x: x, y: cy - bh / 2, width: w, height: bh });
+        hover(hit, seg, m.model, [p.name + ": " + dur(v) + " average"]);
+        svg.appendChild(hit);
+        svg.appendChild(seg);
+        x += w + (isLast ? 0 : gap);
+      });
+      svg.appendChild(svgEl("text", { class: "val", x: x + 8, y: cy + 4 }, dur(sum)));
+    });
+    box.replaceChildren(svg);
+  }
+
+  // ---------- tables and notes ----------
+
+  function drawTimeTable(models) {
+    fillTable($("time-table"), ["Model", "Avg loading model", "Avg reading prompt", "Avg writing answer", "Prompt reused", "Processor"],
+      models.filter(function (m) { return ok(m) > 0; }).map(function (m) {
+        return row([
+          { text: m.model },
+          { text: dur(avgOf(m, m.load_duration)) },
+          { text: dur(avgOf(m, m.prompt_duration)) },
+          { text: dur(avgOf(m, m.output_duration)) },
+          { text: pct(reused(m.prompt_cached_tokens, m.prompt_tokens)) },
+          { text: processor(m) }
+        ]);
+      }));
+  }
+
+  function drawCost(models, label) {
+    var tin = 0, tout = 0;
+    models.forEach(function (m) { tin += m.prompt_tokens; tout += m.output_tokens; });
+    $("cost-value").textContent = money(tin / 1e6 * prices.input + tout / 1e6 * prices.output);
+    $("cost-note").textContent = "Estimate for " + full(tin) + " tokens in and " + full(tout) + " tokens out " + label +
+      ". Running locally costs nothing per token. Prices are examples; enter the ones for the service you'd compare against.";
+  }
+
+  function contextText(m) {
+    var win = fillWindow(m);
+    if (!m.max_context_used) return "–";
+    return compact(m.max_context_used) + (win ? " / " + ctxSize(win) + " (" + Math.round(m.max_context_used / win * 100) + "%)" : "");
+  }
+
+  function drawModelsTable(models) {
+    fillTable($("models-table"),
+      ["Model", "Requests", "Errors", "Avg first word", "Avg speed", "Avg time", "Total tokens in", "Newly read", "Reused", "Total tokens out", "Max context", "Memory needed", "Last used"],
+      models.map(function (m) {
+        return row([
+          { text: m.model },
+          { text: full(m.requests) },
+          { text: full(m.errors) },
+          { text: dur(avgWait(m)) },
+          { text: speedText(m.output_tokens, m.output_duration) },
+          { text: dur(avgTime(m)) },
+          { text: compact(m.prompt_tokens) },
+          { text: compact(newRead(m.prompt_tokens, m.prompt_cached_tokens)) },
+          { text: compact(m.prompt_cached_tokens) },
+          { text: compact(m.output_tokens) },
+          { text: contextText(m) },
+          { text: bytes(m.memory_size) },
+          { text: ago(m.last_used) }
+        ]);
+      }));
+  }
+
+  function note(title, text) {
+    var li = el("li");
+    li.appendChild(el("strong", null, title + ": "));
+    li.appendChild(document.createTextNode(text));
+    return li;
+  }
+
+  function drawNotes(models) {
+    var notes = $("notes");
+    notes.replaceChildren();
+    models.forEach(function (m) {
+      if (m.memory_vram != null && m.memory_size > 0 && m.memory_vram < m.memory_size) {
+        var cpu = Math.round((1 - m.memory_vram / m.memory_size) * 100);
+        notes.appendChild(note("Running partly on the CPU", m.model + " is " + cpu + "% on the CPU, which is much slower than the GPU. " +
+          "A smaller model or a smaller context size may fit fully on the GPU."));
+      }
+      var win = fillWindow(m);
+      if (win > 0 && m.max_context_used >= CONTEXT_WARN_AT * win) {
+        notes.appendChild(note("Near context limit", m.model + " used " + compact(m.max_context_used) + " of its " +
+          ctxSize(win) + " context window. In long chats, older messages may get cut off."));
+      }
+    });
+  }
+
+  function drawLastTable(models) {
+    var withLast = models.filter(function (m) { return m.last; });
+    $("last-card").hidden = !withLast.length;
+    fillTable($("last-table"), ["Model", "When", "First word", "Speed", "Time", "Tokens in / out", "Context"],
+      withLast.map(function (m) {
+        var l = m.last, n = ok(m);
+        return row([
+          { text: m.model },
+          { text: ago(l.at) },
+          { text: dur(waitOf(l.total_duration, l.output_duration)), avg: dur(avgWait(m)) },
+          { text: speedText(l.output_tokens, l.output_duration), avg: tps(m) ? tps(m).toFixed(1) : "–" },
+          { text: dur(l.total_duration), avg: dur(avgTime(m)) },
+          { text: compact(l.prompt_tokens) + " / " + compact(l.output_tokens),
+            avg: n ? compact(m.prompt_tokens / n) + " / " + compact(m.output_tokens / n) : "–" },
+          { text: compact(l.prompt_tokens + l.output_tokens) + " (max " + compact(m.max_context_used) + ")" }
+        ]);
+      }));
+  }
+
+  // The tag list is only redrawn when it changes, so a keyboard user tabbing
+  // through it doesn't lose their place every refresh.
+  var tagsDrawn = "";
+  function drawTags(st) {
+    var all = st.tags || [];
+    var total = Math.max(st.tags_total || 0, all.length);
+    var q = $("tag-search").value.trim().toLowerCase();
+    var matches = q ? all.filter(function (t) { return t.tag.toLowerCase().indexOf(q) !== -1; }) : all;
+    var shown = matches.slice(0, TAGS_SHOWN);
+    var key = JSON.stringify([q, total, shown.map(function (t) { return [t.tag, t.requests, t.errors, ago(t.last_used)]; })]);
+    if (key === tagsDrawn) return;
+    tagsDrawn = key;
+
+    fillTable($("tags-table"), ["Tag", "Requests", "Errors", "Last used"], shown.map(function (tg) {
+      var tr = row([{ text: "" }, { text: full(tg.requests) }, { text: full(tg.errors) }, { text: ago(tg.last_used) }]);
+      var btn = el("button", { type: "button", class: "tag-link" }, tg.tag);
+      btn.addEventListener("click", function () { setTag(tg.tag); });
+      tr.firstChild.appendChild(btn);
+      return tr;
+    }));
+
+    var more = $("tags-more");
+    if (!all.length) more.textContent = "No tags yet.";
+    else if (q && !matches.length) more.textContent = "No recent tags match. Press Enter to open \"" + $("tag-search").value.trim() + "\" anyway.";
+    else if (q) more.textContent = matches.length > TAGS_SHOWN ? "Showing " + TAGS_SHOWN + " of " + matches.length + " matches. Keep typing to narrow it down." : "";
+    else more.textContent = total > TAGS_SHOWN ? "Showing the " + TAGS_SHOWN + " most recent of " + full(total) + " tags. Search to find others." : "";
+  }
+
+  function drawLogTable(entries) {
+    fillTable($("log-table"), ["Time", "Model", "First word", "Speed", "Time taken", "Load / read / write", "Total in", "Newly read", "Reused", "Out", "Status"],
+      entries.map(function (e) {
+        var tr = row([
+          { text: when(e.at, true) },
+          { text: e.model },
+          { text: e.error ? "–" : dur(waitOf(e.total_duration, e.output_duration)) },
+          { text: e.error ? "–" : speedText(e.output_tokens, e.output_duration) },
+          { text: e.error ? "–" : dur(e.total_duration) },
+          { text: e.error ? "–" : dur(e.load_duration) + " / " + dur(e.prompt_duration) + " / " + dur(e.output_duration) },
+          { text: compact(e.prompt_tokens) },
+          { text: compact(newRead(e.prompt_tokens, e.prompt_cached_tokens)) },
+          { text: compact(e.prompt_cached_tokens) },
+          { text: compact(e.output_tokens) },
+          { text: e.error ? "Error" : "OK" }
+        ]);
+        if (e.error) tr.lastChild.className = "status-error";
+        return tr;
+      }));
+  }
+
+  // ---------- rendering ----------
+
+  function setStatus(text, isError) {
+    $("live-text").textContent = text;
+    $("live-text").classList.toggle("error", !!isError);
+    if (isError) $("live-dot").classList.remove("on");
+  }
+
+  function render(st) {
+    $("stats-off").hidden = !st.disabled;
+    $("content").hidden = !!st.disabled;
+    if (st.disabled) { setStatus("Stats are off"); return; }
+
+    var tagged = !!tag;
+    $("tag-banner").hidden = !tagged;
+    $("tags-card").hidden = tagged;
+    $("range-control").hidden = tagged;
+    $("days-card").hidden = tagged;
+    $("log-card").hidden = !tagged;
+    $("last-card").hidden = tagged;
+    if (!tagged) drawTags(st);
+
+    var models, label;
+    if (tagged) {
+      if (!tagLog || tagLog.tag !== tag) return;
+      models = tagLog.models;
+      label = "with this tag";
+      $("tag-name").textContent = tag;
+      $("tag-count").textContent = full(tagLog.total) + (tagLog.total === 1 ? " request" : " requests");
+      $("log-hint").textContent = tagLog.total > tagLog.requests.length
+        ? "Newest " + tagLog.requests.length + " of " + full(tagLog.total) + ", newest first"
+        : "Newest first. Numbers only, never prompts or answers.";
+      drawLogTable(tagLog.requests);
+    } else {
+      models = range === "today" ? st.today_models : st.all_time_models;
+      label = range === "today" ? "today" : "all time";
+    }
+
+    $("since").textContent = st.since ? "Tracking since " + new Date(st.since).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
+    $("live-dot").classList.toggle("on", st.active > 0);
+    setStatus(st.active === 1 ? "1 request running" : st.active > 1 ? st.active + " requests running" : "Idle");
+
+    var tot = { requests: 0, errors: 0, tokens: 0, wait: 0, ok: 0 };
+    models.forEach(function (m) {
+      tot.requests += m.requests; tot.errors += m.errors; tot.tokens += m.output_tokens;
+      tot.ok += ok(m); tot.wait += waitOf(m.total_duration, m.output_duration);
+    });
+    $("t-requests").textContent = full(tot.requests);
+    $("t-requests-note").textContent = models.length + (models.length === 1 ? " model " : " models ") + label;
+    $("t-tokens").textContent = compact(tot.tokens);
+    $("t-tokens-note").textContent = tot.tokens >= 1000 ? full(tot.tokens) + " exactly" : "Across all models";
+    $("t-wait").textContent = tot.ok ? dur(tot.wait / tot.ok) : "–";
+    $("t-errors").textContent = full(tot.errors);
+    $("t-errors-note").textContent = tot.requests ? (tot.errors / tot.requests * 100).toFixed(1) + "% of requests" : "";
+
+    var empty = "No requests " + label + " yet.";
+    if (!tagged) drawDays(st);
+    drawModelBars("chart-speed", "Average speed by model", models, tps, function (m) { return tps(m).toFixed(1); },
+      function (m) { return [tps(m).toFixed(1) + " tokens per second", full(m.output_tokens) + " tokens written"]; }, empty);
+    drawModelBars("chart-wait", "Average wait before first word", models, avgWait, function (m) { return dur(avgWait(m)); },
+      function (m) { return [dur(avgWait(m)) + " average wait", full(m.requests) + " requests"]; }, empty);
+    drawTimeChart(models);
+    drawTimeTable(models);
+    drawCost(models, label);
+
+    $("models-hint").hidden = !!models.length;
+    $("models-hint").textContent = models.length ? "" :
+      tagged ? "No requests with this tag yet. Tag one with: ollama run llama3.2 \"Hi\" --tag " + tag :
+      empty + " Chat with a model, for example: ollama run llama3.2";
+    drawModelsTable(models);
+    drawNotes(tagged ? models : st.all_time_models);
+    if (!tagged) drawLastTable(st.all_time_models);
+  }
+
+  function setRange(r) {
+    range = r;
+    try { localStorage.setItem("ollama-stats-range", r); } catch (e) { /* storage blocked */ }
+    document.querySelectorAll("#range-control button").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.range === r));
+    });
+    if (last) render(last);
+  }
+
+  // ---------- refreshing ----------
+
+  // One refresh at a time: the next starts only after the last one ends,
+  // each gives up after a timeout, and refreshing pauses while the tab is
+  // hidden. A refresh started for an older tag is ignored.
+  var refreshTimer = null, refreshing = null;
+  function refresh() {
+    clearTimeout(refreshTimer);
+    if (refreshing) refreshing.abort();
+    var ctl = new AbortController();
+    refreshing = ctl;
+    var timeout = setTimeout(function () { ctl.abort(); }, REQUEST_TIMEOUT_MS);
+    var want = tag;
+    Promise.all([
+      getJSON("/api/stats", ctl.signal),
+      want ? getJSON("/api/stats/log?limit=200&tag=" + encodeURIComponent(want), ctl.signal) : null
+    ]).then(function (res) {
+      if (want !== tag) return;
+      last = res[0];
+      tagLog = res[1];
+      try {
+        render(last);
+      } catch (e) {
+        console.error(e);
+        setStatus("Something went wrong showing the stats. Reload the page to try again.", true);
+      }
+    }, function (e) {
+      if (ctl !== refreshing) return; // replaced by a newer refresh
+      if (e.status) setStatus("Ollama returned an error: " + e.message, true);
+      else setStatus("Can't reach Ollama. Is it running?", true);
+    }).then(function () {
+      clearTimeout(timeout);
+      if (ctl !== refreshing) return;
+      refreshing = null;
+      if (!document.hidden) refreshTimer = setTimeout(refresh, REFRESH_MS);
+    });
+  }
+
+  function setTag(t) {
+    if (t === tag) return;
+    tag = t;
+    tagLog = null;
+    tagsDrawn = "";
+    if (t) $("tag-search").value = "";
+    window.scrollTo(0, 0);
+    history.replaceState(null, "", t ? "#tag=" + encodeURIComponent(t) : location.pathname);
+    refresh();
+  }
+
+  function onPriceInput() {
+    var inV = $("price-in").value.trim(), outV = $("price-out").value.trim();
+    var a = Number(inV), b = Number(outV);
+    var badIn = inV === "" || !isFinite(a) || a < 0, badOut = outV === "" || !isFinite(b) || b < 0;
+    $("price-in").setAttribute("aria-invalid", String(badIn));
+    $("price-out").setAttribute("aria-invalid", String(badOut));
+    if (badIn || badOut) { $("price-error").textContent = "Enter a price of 0 or more for both fields."; return; }
+    $("price-error").textContent = "";
+    prices = { input: a, output: b };
+    try { localStorage.setItem("ollama-stats-prices", JSON.stringify(prices)); } catch (e) { /* storage blocked */ }
+    if (last) render(last);
+  }
+
+  function initUsage() {
+    $("nav-usage").setAttribute("aria-current", "page");
+    document.querySelectorAll("#range-control button").forEach(function (b) {
+      b.addEventListener("click", function () { setRange(b.dataset.range); });
+    });
+    $("price-in").value = prices.input;
+    $("price-out").value = prices.output;
+    $("price-in").addEventListener("input", onPriceInput);
+    $("price-out").addEventListener("input", onPriceInput);
+    $("tag-search").addEventListener("input", function () {
+      $("tag-error").textContent = "";
+      $("tag-search").removeAttribute("aria-invalid");
+      if (last) drawTags(last);
+    });
+    $("tag-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var q = $("tag-search").value.trim();
+      if (!q) return;
+      if (!Grading.isValidTag(q)) {
+        $("tag-search").setAttribute("aria-invalid", "true");
+        $("tag-error").textContent = "Tags can only use letters, numbers, spaces, and - _ . : / @ (up to 64 characters).";
+        return;
+      }
+      var all = (last && last.tags) || [];
+      var exact = all.filter(function (t) { return t.tag === q; })[0];
+      var matches = all.filter(function (t) { return t.tag.toLowerCase().indexOf(q.toLowerCase()) !== -1; });
+      setTag(exact ? exact.tag : matches.length === 1 ? matches[0].tag : q);
+    });
+    $("tag-clear").addEventListener("click", function () { setTag(""); });
+    window.addEventListener("hashchange", function () { setTag(tagFromHash()); });
+    window.addEventListener("resize", function () { if (last) render(last); });
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) refresh(); });
+
+    setRange(range);
+    refresh();
+  }
+
+  // =====================================================================
+  // Tests page
+  // =====================================================================
+
+  var T = { suites: [], suite: null, models: [], runs: [], running: false, abort: null, shownRun: null, tab: "perf" };
+
+  // Result kinds saved with each run. "acc" is the earlier name for fact
+  // checks, still read so older runs load.
+  function isFact(r) { return r.kind === "fact" || r.kind === "acc"; }
+  function runHas(run, section) {
+    return run.sections.indexOf(section) !== -1 || (section === "fact_checks" && run.sections.indexOf("accuracy") !== -1);
+  }
+
+  // ---------- prompts for performance scenarios ----------
+
+  var FILLER = [
+    "The town sits at the bend of a slow river, where the water turns green in late summer.",
+    "A stone bridge crosses the river near the old mill, which now sells bread on weekends.",
+    "Most streets are narrow, and the houses are painted in faded yellows, blues, and reds.",
+    "On market days, farmers bring apples, cheese, honey, and baskets of fresh herbs.",
+    "The library opens at nine and keeps a shelf of local maps going back two hundred years.",
+    "A bell in the square rings every hour, and children race to count the chimes.",
+    "In winter, fog settles over the fields and the lamps along the river glow orange.",
+    "The bakery's best seller is a small walnut loaf that usually sells out before noon.",
+    "Cyclists follow the river path north for twelve kilometers to reach the lake.",
+    "An old clock repair shop still fixes watches by hand, one tiny gear at a time."
+  ];
+  function runCode() { return String(1000 + Math.floor(Math.random() * 9000)); }
+  function fillerText(n) {
+    var out = [], count = 0, i = 0;
+    while (count < n) { var line = FILLER[i % FILLER.length]; out.push(line); count += line.split(" ").length; i++; }
+    return out.join(" ");
+  }
+  var REASONING = "A train leaves City A at 9:00 AM traveling at 60 km/h toward City B, which is 300 km away. " +
+    "A second train leaves City B at 10:00 AM traveling toward City A at 90 km/h. At what time do the trains meet, " +
+    "and how far from City A? Show your work.";
+
+  // A unique code at the start of every message stops Ollama from reusing
+  // earlier work, so each scenario measures reading from scratch.
+  function scenarioMessages(sc, code) {
+    var p = "[" + code + "] ";
+    if (sc.input === "reasoning") p += REASONING;
+    else if (sc.input_words) p += "Here are some notes about a town.\n\n" + fillerText(sc.input_words) + "\n\nReply with only the word OK.";
+    else p += "Reply with only the word OK.";
+    return [{ role: "user", content: p }];
+  }
+
+  // A chat of filler notes, used to fill the context window to a set size.
+  function contextChat(code, pairs) {
+    var m = [
+      { role: "user", content: "[" + code + "] I'm going to send you some notes." },
+      { role: "assistant", content: "Okay, send them." }
+    ];
+    for (var i = 1; i <= pairs; i++) {
+      m.push({ role: "user", content: "[" + code + "] Note " + i + ": " + FILLER[i % FILLER.length] });
+      m.push({ role: "assistant", content: "Noted, note " + i + " saved." });
+    }
+    m.push({ role: "user", content: "Reply with only the word OK." });
+    return m;
+  }
+
+  // ---------- sending test requests ----------
+
+  // Every model request from the Tests page carries this header, so Ollama
+  // logs it but doesn't count it as usage.
+  var TEST_HEADERS = { "Content-Type": "application/json", "X-Ollama-Stats": "test" };
+  var SAMPLING = { temperature: 0, seed: 1 };
+
+  function postJSON(url, body, signal, headers) {
+    return fetch(url, { method: "POST", headers: headers || { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: signal })
+      .then(readJSON);
+  }
+  function chat(model, messages, opts, signal) {
+    var body = { model: model, messages: messages, stream: false, options: Object.assign({}, SAMPLING, opts.options) };
+    if (opts.tag) body.tag = opts.tag;
+    if (opts.think !== undefined) body.think = opts.think;
+    if (opts.format) body.format = opts.format;
+    return postJSON("/api/chat", body, signal, TEST_HEADERS);
+  }
+  // Output scenarios continue a plain number list with no chat template, so
+  // every model keeps writing until the token cap instead of stopping early.
+  function generateRaw(model, prompt, opts, signal) {
+    var body = { model: model, prompt: prompt, raw: true, stream: false, options: Object.assign({}, SAMPLING, opts.options) };
+    if (opts.tag) body.tag = opts.tag;
+    return postJSON("/api/generate", body, signal, TEST_HEADERS);
+  }
+
+  function stopped() { return new DOMException("Stopped", "AbortError"); }
+  function sleep(ms, signal) {
+    return new Promise(function (resolve, reject) {
+      if (signal.aborted) { reject(stopped()); return; }
+      function onAbort() { clearTimeout(t); reject(stopped()); }
+      var t = setTimeout(function () { signal.removeEventListener("abort", onAbort); resolve(); }, ms);
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
+  // Unloads a model and waits until it's out of memory, so a cold start
+  // really starts cold.
+  function unload(model, signal) {
+    return postJSON("/api/generate", { model: model, keep_alive: 0 }, signal, TEST_HEADERS).then(function () {
+      var tries = 0;
+      function check() {
+        return getJSON("/api/ps", signal).then(function (ps) {
+          var still = (ps.models || []).some(function (m) { return m.name === model || m.model === model; });
+          if (!still) return;
+          if (++tries > 30) throw new Error("the model didn't unload, so a cold start couldn't be measured");
+          return sleep(500, signal).then(check);
+        });
+      }
+      return check();
+    });
+  }
+
+  function metricsOf(r) {
+    return {
+      load: r.load_duration || 0, read: r.prompt_eval_duration || 0, write: r.eval_duration || 0, total: r.total_duration || 0,
+      tokens_in: r.prompt_eval_count || 0, tokens_cached: r.prompt_eval_cached_count || 0, tokens_out: r.eval_count || 0
+    };
+  }
+  function average(list) {
+    var out = {};
+    Object.keys(list[0]).forEach(function (k) {
+      if (typeof list[0][k] === "number") out[k] = list.reduce(function (s, x) { return s + x[k]; }, 0) / list.length;
+    });
+    return out;
+  }
+
+  // What a performance scenario measures, from how it's set up.
+  function metricOf(sc) {
+    if (sc.cold) return "load";
+    if (sc.window) return "context";
+    if (sc.output === "count") return "write";
+    if (sc.reuse) return "reuse";
+    if (sc.think !== undefined) return "think";
+    return "read";
+  }
+
+  // Measures how many tokens the start of a context chat and each filler
+  // exchange take with this model's tokenizer. Done once per model and
+  // window size, then reused by every context scenario and repeat. A failed
+  // measurement isn't kept, so the next scenario tries again.
+  function fillerSize(model, window, ctx) {
+    var key = model + "|" + window;
+    if (!ctx.fillerSizes[key]) {
+      var calib = { options: { num_predict: 1, num_ctx: window } };
+      ctx.fillerSizes[key] = chat(model, contextChat(runCode(), 0), calib, ctx.signal).then(function (a) {
+        return chat(model, contextChat(runCode(), 10), calib, ctx.signal).then(function (b) {
+          if (!(a.prompt_eval_count > 0) || !(b.prompt_eval_count > a.prompt_eval_count)) {
+            throw new Error("couldn't measure the model's token counts");
+          }
+          return { base: a.prompt_eval_count, per: (b.prompt_eval_count - a.prompt_eval_count) / 10 };
+        });
+      });
+      ctx.fillerSizes[key].catch(function () { delete ctx.fillerSizes[key]; });
+    }
+    return ctx.fillerSizes[key];
+  }
+
+  function runPerformance(model, info, sc, ctx) {
+    var signal = ctx.signal;
+    if (sc.thinking_only && !info.thinking) return Promise.resolve({ skipped: "Not a thinking model" });
+    var opts = { tag: ctx.tag, think: sc.think, options: { num_predict: sc.output_tokens } };
+    if (sc.window) opts.options.num_ctx = sc.window;
+
+    // Load the model with the right window first, so loading time doesn't
+    // leak into reading or writing (except for the cold start).
+    function ready() {
+      if (sc.cold) return unload(model, signal).then(function () { ctx.loadedWindow[model] = 0; });
+      var want = sc.window || 0;
+      if (ctx.loadedWindow[model] === want) return Promise.resolve();
+      return chat(model, [{ role: "user", content: "Hi" }], { options: { num_predict: 1, num_ctx: sc.window || undefined } }, signal)
+        .then(function () { ctx.loadedWindow[model] = want; });
+    }
+
+    function once() {
+      var code = runCode();
+      if (sc.window) {
+        return fillerSize(model, sc.window, ctx).then(function (size) {
+          var pairs = Math.max(0, Math.round((sc.window * sc.fill - size.base) / size.per));
+          return chat(model, contextChat(code, pairs), opts, signal).then(function (r) {
+            var m = metricsOf(r);
+            m.sent = Math.round(size.base + pairs * size.per);
+            return m;
+          });
+        });
+      }
+      if (sc.output === "count") {
+        var list = "Run " + code + ".\n";
+        for (var k = 1; k <= 5; k++) list += k + "\n";
+        return generateRaw(model, list, opts, signal).then(metricsOf);
+      }
+      var msgs = scenarioMessages(sc, code);
+      var first = sc.reuse ? chat(model, msgs, { options: opts.options }, signal) : Promise.resolve();
+      return first.then(function () { return chat(model, msgs, opts, signal); }).then(metricsOf);
+    }
+
+    var results = [];
+    function loop(i) {
+      if (i >= ctx.repeats) return Promise.resolve(Object.assign({ runs: ctx.repeats }, average(results)));
+      return ready().then(once).then(function (m) { results.push(m); return loop(i + 1); });
+    }
+    return loop(0);
+  }
+
+  function runFactCheck(model, test, ctx) {
+    var opts = { tag: ctx.tag, options: { num_predict: Grading.FACT_CHECK_TOKENS } };
+    if (test.answer) opts.format = Grading.answerSchema(test.answer);
+    return chat(model, [{ role: "user", content: test.prompt }], opts, ctx.signal).then(function (r) {
+      var text = Grading.cleanAnswer(r.message && r.message.content);
+      var out = { tokens_out: r.eval_count || 0, total: r.total_duration || 0 };
+      if (test.answer) {
+        // Known answers only keep the answer itself.
+        var g = Grading.gradeReply(test.answer, text);
+        out.pass = g.pass;
+        out.got = g.got != null ? truncate(g.got, 80)
+          : (r.eval_count || 0) >= Grading.FACT_CHECK_TOKENS ? "(ran out of room before answering)" : "(no usable answer)";
+      } else {
+        // For free-form tests the reply is the answer (the sentence, the code).
+        out.pass = Grading.check(test, text);
+        out.got = truncate(text.replace(/\s+/g, " "), 40);
+        out.answer = text.slice(0, 800);
+      }
+      return out;
+    });
+  }
+
+  function setProgress(done, total, text) {
+    var p = total ? Math.round(done / total * 100) : 0;
+    $("progress-fill").style.width = p + "%";
+    $("progress-bar").setAttribute("aria-valuenow", String(p));
+    $("progress-text").textContent = text;
+  }
+
+  function startRun() {
+    var suite = T.suite;
+    if (!suite) { $("run-error").textContent = "No test suite is loaded. Reload the page once Ollama is running."; return; }
+    var models = Array.prototype.slice.call(document.querySelectorAll("#model-list input:checked")).map(function (i) { return i.value; });
+    var doPerf = $("run-perf").checked && suite.performance.length > 0;
+    var doFacts = $("run-facts").checked && suite.fact_checks.length > 0;
+    if (!models.length) { $("run-error").textContent = "Pick at least one model."; return; }
+    if (!doPerf && !doFacts) { $("run-error").textContent = "Pick Performance, Fact checks, or both."; return; }
+    $("run-error").textContent = "";
+    try { localStorage.setItem("ollama-tests-models", JSON.stringify(models)); } catch (e) { /* storage blocked */ }
+
+    var now = new Date();
+    var stamp = now.getFullYear() + String(now.getMonth() + 1).padStart(2, "0") + String(now.getDate()).padStart(2, "0") +
+      "-" + String(now.getHours()).padStart(2, "0") + String(now.getMinutes()).padStart(2, "0") + String(now.getSeconds()).padStart(2, "0");
+    var id = "run-" + stamp;
+    var ctl = new AbortController();
+    var ctx = { tag: suite.name + ":" + id, signal: ctl.signal, repeats: Number($("repeats").value) || 1, loadedWindow: {}, fillerSizes: {} };
+    var run = { id: id, suite: suite.name, tag: ctx.tag, started_at: now.toISOString(), models: models,
+      sections: [].concat(doFacts ? ["fact_checks"] : [], doPerf ? ["performance"] : []), results: [] };
+
+    var infoOf = {};
+    T.models.forEach(function (m) { infoOf[m.name] = m; });
+    var steps = [];
+    models.forEach(function (model) {
+      if (doFacts) suite.fact_checks.forEach(function (t) { steps.push({ kind: "fact", model: model, item: t }); });
+      if (doPerf) suite.performance.forEach(function (sc) { steps.push({ kind: "perf", model: model, item: sc }); });
+    });
+
+    T.running = true; T.abort = ctl;
+    $("run-btn").disabled = true; $("stop-btn").hidden = false; $("progress").hidden = false;
+
+    var i = 0;
+    function next() {
+      if (i >= steps.length) return Promise.resolve();
+      var st = steps[i];
+      setProgress(i, steps.length, "Running " + (i + 1) + " of " + steps.length + ": " + st.model + " · " +
+        (st.kind === "fact" ? st.item.category + ": " + st.item.id : st.item.title));
+      var work = st.kind === "fact" ? runFactCheck(st.model, st.item, ctx) : runPerformance(st.model, infoOf[st.model] || {}, st.item, ctx);
+      return work.then(function (res) {
+        run.results.push(Object.assign({ kind: st.kind, id: st.item.id, model: st.model }, res));
+      }, function (err) {
+        if (err && err.name === "AbortError") throw err;
+        // If Ollama can't be reached at all, stop instead of failing every step.
+        if (err && !err.status) throw err;
+        run.results.push({ kind: st.kind, id: st.item.id, model: st.model, error: String(err && err.message || err) });
+      }).then(function () { i++; return next(); });
+    }
+
+    next().catch(function (err) {
+      if (err && err.name === "AbortError") run.cancelled = true;
+      else { run.cancelled = true; $("run-error").textContent = "The run stopped early: can't reach Ollama. Is it still running?"; }
+    }).then(function () {
+      run.finished_at = new Date().toISOString();
+      setProgress(i, steps.length, run.cancelled ? "Stopped after " + i + " of " + steps.length + "." : "Done. " + steps.length + " steps finished.");
+      return postJSON("/api/stats/suite-runs", run).then(function () { return null; }, function (e) {
+        // Keep the results on screen even when they can't be saved.
+        run.unsaved = true;
+        $("run-error").textContent = "These results couldn't be saved (" + e.message + "). They'll be gone when you leave this page.";
+        return run;
+      });
+    }).then(function (unsaved) {
+      T.running = false; T.abort = null;
+      $("run-btn").disabled = false; $("stop-btn").hidden = true;
+      return loadRuns(run.id, unsaved);
+    });
+  }
+
+  // ---------- results ----------
+
+  function suiteByName(name) { return T.suites.filter(function (s) { return s.name === name; })[0] || null; }
+
+  function cell(main, sub, cls) {
+    var td = el("td", cls ? { class: cls } : null);
+    td.appendChild(el("span", { class: "main" }, main));
+    if (sub) td.appendChild(el("span", { class: "sub" }, sub));
+    return td;
+  }
+  function rateText(tokens, ns) { var v = speedOf(tokens, ns); return v > 0 ? Math.round(v).toLocaleString() + " tok/s" : "–"; }
+
+  // Each cell shows the number its scenario was built to measure. key is
+  // what "fastest" is judged by.
+  function perfCell(sc, r) {
+    if (!r) return { main: "–" };
+    if (r.skipped) return { main: "Skipped", sub: r.skipped, cls: "skip" };
+    if (r.error) return { main: "Error", sub: truncate(r.error, 60), cls: "fail" };
+    switch (metricOf(sc)) {
+      case "load": return { main: dur(r.load), sub: "total " + dur(r.total), key: r.load };
+      case "read": return { main: dur(r.read), sub: compact(r.tokens_in) + " tokens · " + rateText(r.tokens_in - r.tokens_cached, r.read), key: r.read };
+      case "write": return { main: dur(r.write), sub: compact(r.tokens_out) + " tokens · " + rateText(r.tokens_out, r.write), key: r.write };
+      case "reuse": return { main: dur(r.read), sub: pct(reused(r.tokens_cached, r.tokens_in)) + " reused", key: r.read };
+      case "think": return { main: dur(r.total), sub: compact(r.tokens_out) + " tokens out", key: r.total };
+      case "context":
+        return { main: dur(r.read), sub: "kept " + compact(r.tokens_in) + " of ~" + compact(r.sent) + " tokens" +
+          (r.tokens_in < r.sent * 0.97 ? ", oldest dropped" : ""), key: r.read };
+    }
+  }
+
+  // Gives a results table fixed widths for its first columns; the model
+  // columns split what's left evenly.
+  function fixColumns(table, widths) {
+    table.className = "fixed";
+    var cg = el("colgroup");
+    widths.forEach(function (w) { cg.appendChild(el("col", { style: "width: " + w })); });
+    table.insertBefore(cg, table.firstChild);
+  }
+
+  // Indexes results by test id and model, so each table cell is a direct
+  // lookup instead of a search through every result.
+  function indexResults(results) {
+    var byKey = {};
+    results.forEach(function (r) { byKey[r.id + "\u0000" + r.model] = r; });
+    return function (id, model) { return byKey[id + "\u0000" + model]; };
+  }
+
+  function drawPerfResults(run, suite, box) {
+    var res = run.results.filter(function (r) { return r.kind === "perf"; });
+    if (!res.length) { box.appendChild(el("p", { class: "hint" }, "No performance scenarios finished in this run.")); return; }
+    var find = indexResults(res);
+    var thinkOn = suite.performance.filter(function (sc) { return sc.think === true; })[0];
+    var groups = [];
+    suite.performance.forEach(function (sc) { if (groups.indexOf(sc.group) === -1) groups.push(sc.group); });
+    groups.forEach(function (g) {
+      box.appendChild(el("h3", { class: "group-title" }, g));
+      var t = el("table");
+      fillTable(t, ["Scenario", "Measures"].concat(run.models), suite.performance.filter(function (sc) { return sc.group === g; }).map(function (sc) {
+        var tr = el("tr");
+        tr.appendChild(el("td", null, sc.title));
+        tr.appendChild(el("td", { class: "prompt-cell" }, sc.isolates));
+        var cells = run.models.map(function (m) {
+          var r = find(sc.id, m), c = perfCell(sc, r);
+          // If "thinking off" wrote about as much as "thinking on", the model
+          // kept thinking anyway, so say so instead of showing a speedup.
+          if (sc.think === false && thinkOn && r && !r.skipped && !r.error) {
+            var on = find(thinkOn.id, m);
+            if (on && on.tokens_out && r.tokens_out >= on.tokens_out * 0.8) c.sub = "couldn't turn thinking off for this model";
+          }
+          return c;
+        });
+        var keys = cells.map(function (c) { return c.key; }).filter(function (k) { return k > 0; });
+        var best = keys.length > 1 ? Math.min.apply(null, keys) : null;
+        cells.forEach(function (c) { tr.appendChild(cell(c.main, c.sub, (c.cls || "") + (best !== null && c.key === best ? " best" : ""))); });
+        return tr;
+      }));
+      fixColumns(t, ["16%", "24%"]);
+      box.appendChild(wrapTable(t));
+    });
+    box.appendChild(el("p", { class: "hint", style: "margin-top: 12px" }, "Bold marks the fastest model for each scenario. Times are averages when a scenario ran more than once."));
+  }
+
+  // Score color bands for the fact check summary.
+  var SCORE_GOOD = 0.8, SCORE_MID = 0.5;
+
+  function drawFactResults(run, suite, box) {
+    var res = run.results.filter(isFact);
+    if (!res.length) { box.appendChild(el("p", { class: "hint" }, "No fact checks finished in this run.")); return; }
+    var find = indexResults(res);
+    var cats = [], groupOf = {}, categoryOf = {};
+    suite.fact_checks.forEach(function (t) {
+      if (cats.indexOf(t.category) === -1) cats.push(t.category);
+      groupOf[t.category] = t.group || "";
+      categoryOf[t.id] = t.category;
+    });
+    // Count passes per model and category in one pass over the results.
+    var tally = {};
+    res.forEach(function (r) {
+      if (r.error || !categoryOf[r.id]) return;
+      [categoryOf[r.id], ""].forEach(function (cat) {
+        var k = r.model + "\u0000" + cat;
+        var t = tally[k] || (tally[k] = { passed: 0, total: 0 });
+        t.total++;
+        if (r.pass) t.passed++;
+      });
+    });
+
+    box.appendChild(el("h3", { class: "group-title" }, "Score by category"));
+    var rows = [], lastGroup = null;
+    cats.concat([""]).forEach(function (cat) {
+      var grp = cat ? groupOf[cat] : "";
+      if (grp && grp !== lastGroup) {
+        var gh = el("tr");
+        gh.appendChild(el("td", { colspan: String(run.models.length + 1), class: "group-title" }, grp));
+        rows.push(gh);
+        lastGroup = grp;
+      }
+      var tr = el("tr");
+      tr.appendChild(el("td", null, cat || "All fact checks"));
+      var scores = run.models.map(function (m) { return tally[m + "\u0000" + cat] || { passed: 0, total: 0 }; });
+      var bestRate = Math.max.apply(null, scores.map(function (s) { return s.total ? s.passed / s.total : -1; }));
+      scores.forEach(function (s) {
+        var r = s.total ? s.passed / s.total : -1;
+        var color = r < 0 ? "" : r >= SCORE_GOOD ? " score-good" : r >= SCORE_MID ? " score-mid" : " score-low";
+        tr.appendChild(cell(s.total ? s.passed + " of " + s.total : "–", s.total ? Math.round(r * 100) + "%" : "",
+          (run.models.length > 1 && r === bestRate && r > 0 ? "best" : "") + color));
+      });
+      rows.push(tr);
+    });
+    var t = el("table");
+    fillTable(t, ["Category"].concat(run.models), rows);
+    fixColumns(t, ["30%"]);
+    box.appendChild(wrapTable(t));
+    var legend = el("ul", { class: "score-legend" });
+    [["--score-good", "80% or more"], ["--score-mid", "50% to 79%"], ["--score-low", "Under 50%"]].forEach(function (x) {
+      var li = el("li");
+      li.appendChild(el("i", { style: "background: var(" + x[0] + ")" }));
+      li.appendChild(document.createTextNode(x[1]));
+      legend.appendChild(li);
+    });
+    box.appendChild(legend);
+
+    box.appendChild(el("h3", { class: "group-title" }, "Every test"));
+    var t2 = el("table");
+    fillTable(t2, ["Test", "Level"].concat(run.models), suite.fact_checks.filter(function (test) {
+      return run.models.some(function (m) { return find(test.id, m); });
+    }).map(function (test) {
+      var tr = el("tr");
+      var pc = el("td", { class: "prompt-cell" });
+      pc.appendChild(el("span", { class: "main" }, test.category + (test.group ? " · " + test.group : "")));
+      pc.appendChild(el("span", { class: "sub" }, truncate(test.prompt, 120)));
+      tr.appendChild(pc);
+      tr.appendChild(el("td", null, test.level));
+      run.models.forEach(function (m) {
+        var r = find(test.id, m), td = el("td");
+        if (!r) {
+          td.textContent = "–";
+        } else if (r.error) {
+          td.appendChild(el("span", { class: "fail" }, "Error"));
+          td.appendChild(el("span", { class: "sub" }, truncate(r.error, 60)));
+        } else {
+          // Pass or Fail by default; click to see their answer.
+          var d = el("details");
+          d.appendChild(el("summary", { class: r.pass ? "pass" : "fail" }, r.pass ? "✓ Pass" : "✗ Fail"));
+          if (test.answer) {
+            d.appendChild(el("p", null, "Answer: " + (r.got != null ? r.got : "–")));
+            if (!r.pass) d.appendChild(el("p", null, "Expected: " + Grading.expected(test.answer)));
+          } else {
+            d.appendChild(el("p", null, r.answer || "(empty answer)"));
+          }
+          td.appendChild(d);
+        }
+        tr.appendChild(td);
+      });
+      return tr;
+    }));
+    fixColumns(t2, ["30%", "76px"]);
+    box.appendChild(wrapTable(t2));
+    box.appendChild(el("p", { class: "hint", style: "margin-top: 12px" }, "Click Pass or Fail to see the model's answer, and what was expected if it's wrong. Code is checked for recognizable patterns, not run."));
+  }
+
+  // Draws one results tab. If the selected run didn't include that section,
+  // it shows the most recent run that did, and says so.
+  function drawSection(section, run) {
+    var box = $(section === "performance" ? "perf-results" : "facts-results");
+    var label = section === "performance" ? "performance tests" : "fact checks";
+    box.replaceChildren();
+    var shown = runHas(run, section) ? run : T.runs.filter(function (r) { return runHas(r, section); })[0];
+    if (!shown) {
+      box.appendChild(el("p", { class: "hint" }, "No " + label + " yet. Run tests with " + (section === "performance" ? "Performance" : "Fact checks") + " checked."));
+      return;
+    }
+    if (shown !== run) {
+      box.appendChild(el("p", { class: "hint" }, "The selected run didn't include " + label + ", so this shows the latest run that did, from " + when(shown.started_at) + "."));
+    }
+    var suite = suiteByName(shown.suite);
+    if (!suite) {
+      box.appendChild(el("p", { class: "hint" }, "This run used the \"" + shown.suite + "\" suite, which isn't installed anymore, so its results can't be shown."));
+      return;
+    }
+    (section === "performance" ? drawPerfResults : drawFactResults)(shown, suite, box);
+  }
+
+  function showRun(id) {
+    var run = T.runs.filter(function (r) { return r.id === id; })[0];
+    $("results-card").hidden = !run;
+    if (!run) return;
+    T.shownRun = run;
+    $("run-select").value = run.id;
+    var suite = suiteByName(run.suite);
+    var meta = $("run-meta");
+    meta.replaceChildren(document.createTextNode((suite ? suite.title : run.suite) + " · " + when(run.started_at) + " · " +
+      run.models.length + (run.models.length === 1 ? " model" : " models") +
+      (run.cancelled ? " · stopped early" : "") + (run.unsaved ? " · not saved" : "") + " · "));
+    meta.appendChild(el("a", { href: "/stats#tag=" + encodeURIComponent(run.tag) }, "Speed details on the Usage page"));
+
+    document.querySelectorAll("#results-tabs button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.tab === T.tab)); });
+    $("perf-results").hidden = T.tab !== "perf";
+    $("facts-results").hidden = T.tab !== "facts";
+    drawSection("performance", run);
+    drawSection("fact_checks", run);
+  }
+
+  // Loads saved runs and shows one. An unsaved run (when saving failed) is
+  // kept at the top of the list so its results stay on screen.
+  function loadRuns(selectID, unsaved) {
+    return getJSON("/api/stats/suite-runs").then(function (data) { return data.runs || []; }, function () { return T.runs; })
+      .then(function (runs) {
+        T.runs = runs.filter(function (r) { return !r.unsaved; });
+        if (unsaved) T.runs.unshift(unsaved);
+        var sel = $("run-select");
+        sel.replaceChildren.apply(sel, T.runs.map(function (r) {
+          return el("option", { value: r.id }, when(r.started_at) + " · " + r.models.join(", ") + (r.cancelled ? " (stopped)" : "") + (r.unsaved ? " (not saved)" : ""));
+        }));
+        showRun(selectID || (T.runs[0] && T.runs[0].id));
+      });
+  }
+
+  // ---------- setup ----------
+
+  function drawSuite() {
+    var s = T.suite;
+    $("suite-desc").textContent = s.description || s.title;
+    $("perf-count").textContent = s.performance.length + " scenarios";
+    $("facts-count").textContent = s.fact_checks.length + " tests";
+    fillTable($("about-perf"), ["Group", "Scenario", "Measures", "Output cap"], s.performance.map(function (sc) {
+      return row([{ text: sc.group }, { text: sc.title + (sc.thinking_only ? " (thinking models)" : "") }, { text: sc.isolates }, { text: sc.output_tokens + " tokens" }]);
+    }));
+    fillTable($("about-facts"), ["Group", "Category", "Level", "Graded by", "Prompt"], s.fact_checks.map(function (t) {
+      var how = t.answer ? "Exact answer (JSON)" : t.check.type === "code" ? "Code patterns" : "Rule: " + t.check.type.replace(/_/g, " ");
+      var tr = row([{ text: t.group }, { text: t.category }, { text: t.level }, { text: how }, { text: truncate(t.prompt, 160) }]);
+      tr.lastChild.className = "prompt-cell";
+      return tr;
+    }));
+  }
+
+  function drawModels() {
+    var saved = [];
+    try { saved = JSON.parse(localStorage.getItem("ollama-tests-models") || "[]"); } catch (e) { /* storage blocked */ }
+    var box = $("model-list");
+    box.replaceChildren();
+    if (!T.models.length) { box.appendChild(el("p", { class: "hint" }, "No chat models installed. Download one with: ollama pull llama3.2")); return; }
+    T.models.forEach(function (m) {
+      var lab = el("label", { class: "check" });
+      var input = el("input", { type: "checkbox", value: m.name });
+      if (saved.indexOf(m.name) !== -1) input.checked = true;
+      lab.appendChild(input);
+      lab.appendChild(document.createTextNode(m.name));
+      lab.appendChild(el("span", { class: "meta" }, bytes(m.size)));
+      if (m.thinking) lab.appendChild(el("span", { class: "badge" }, "thinking"));
+      box.appendChild(lab);
+    });
+  }
+
+  function initTests() {
+    $("usage-view").hidden = true;
+    $("tests-view").hidden = false;
+    $("nav-tests").setAttribute("aria-current", "page");
+    document.title = "Ollama Tests";
+    $("run-btn").disabled = true;
+
+    $("run-btn").addEventListener("click", startRun);
+    $("stop-btn").addEventListener("click", function () { if (T.abort) T.abort.abort(); });
+    $("run-select").addEventListener("change", function (e) { showRun(e.target.value); });
+    $("suite-select").addEventListener("change", function (e) { T.suite = suiteByName(e.target.value) || T.suite; drawSuite(); });
+    document.querySelectorAll("#results-tabs button").forEach(function (b) {
+      b.addEventListener("click", function () { T.tab = b.dataset.tab; if (T.shownRun) showRun(T.shownRun.id); });
+    });
+    window.addEventListener("beforeunload", function (e) { if (T.running) { e.preventDefault(); e.returnValue = ""; } });
+
+    Promise.all([getJSON("/api/stats/suites"), getJSON("/api/tags")]).then(function (res) {
+      T.suites = (res[0].suites || []).map(function (s) {
+        s.performance = s.performance || [];
+        s.fact_checks = s.fact_checks || [];
+        return s;
+      });
+      T.suite = T.suites[0] || null;
+      if (!T.suite) { $("suite-desc").textContent = "No test suites found."; return; }
+      var sel = $("suite-select");
+      sel.replaceChildren.apply(sel, T.suites.map(function (s) { return el("option", { value: s.name }, s.title + (s.built_in ? " (built in)" : "")); }));
+      $("suite-field").hidden = T.suites.length < 2;
+      if ((res[0].problems || []).length) {
+        $("run-error").textContent = "Some suite files couldn't be used: " +
+          res[0].problems.map(function (p) { return p.file + " (" + p.error + ")"; }).join("; ");
+      }
+      T.models = (res[1].models || []).filter(function (m) {
+        return !m.capabilities || m.capabilities.indexOf("completion") !== -1;
+      }).map(function (m) {
+        return { name: m.name, size: m.size, thinking: (m.capabilities || []).indexOf("thinking") !== -1 };
+      });
+      drawSuite();
+      drawModels();
+      $("run-btn").disabled = false;
+      return loadRuns();
+    }).catch(function (e) {
+      $("suite-desc").textContent = "Can't load the tests. Is Ollama running? Reload the page to try again.";
+      $("run-error").textContent = e.message;
+    });
+  }
+
+  if (/\/stats\/tests\/?$/.test(location.pathname)) initTests();
+  else initUsage();
+})();
+</script>
+</body>
+</html>

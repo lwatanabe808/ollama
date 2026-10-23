@@ -15,6 +15,7 @@
 - [Push a Model](#push-a-model)
 - [Generate Embeddings](#generate-embeddings)
 - [List Running Models](#list-running-models)
+- [Usage Stats](#usage-stats)
 - [Version](#version)
 
 ## Conventions
@@ -56,6 +57,7 @@ Advanced parameters (optional):
 - `stream`: if `false` the response will be returned as a single response object, rather than a stream of objects
 - `raw`: if `true` no formatting will be applied to the prompt. You may choose to use the `raw` parameter if you are specifying a full templated prompt in your request to the API
 - `keep_alive`: controls how long the model will stay loaded into memory following the request (default: `5m`)
+- `tag`: a label for this request in the [usage stats](#usage-stats) log. It has no effect on the response.
 - `context` (deprecated): the context parameter returned from a previous request to `/generate`, this can be used to keep a short conversational memory
 
 #### Structured outputs
@@ -513,6 +515,7 @@ Advanced parameters (optional):
 - `options`: additional model parameters listed in the documentation for the [Modelfile](./modelfile.mdx#valid-parameters-and-values) such as `temperature`
 - `stream`: if `false` the response will be returned as a single response object, rather than a stream of objects
 - `keep_alive`: controls how long the model will stay loaded into memory following the request (default: `5m`)
+- `tag`: a label for this request in the [usage stats](#usage-stats) log. It has no effect on the response.
 
 ### Tool calling
 
@@ -1802,6 +1805,147 @@ A single JSON object will be returned.
   ]
 }
 ```
+
+## Usage Stats
+
+Ollama tracks usage for chat and generate requests: request counts, timings, tokens, context use, and memory, for each model. Only counts and timings are kept, never prompts or answers. See [Usage stats](./usage-stats.mdx) for a guide. Stats can be turned off with `OLLAMA_NOSTATS=1`.
+
+Requests can carry two headers:
+
+- `X-Ollama-Tag: NAME`: tags the request, like the `tag` field. Works with the OpenAI and Anthropic compatible endpoints too. If a request has both, the `tag` field wins. An invalid header is ignored, while an invalid `tag` field returns a 400 error.
+- `X-Ollama-Stats: test`: marks the request as a test. It's logged, so it can be looked up by tag, but isn't counted as usage.
+
+### Get usage stats
+
+```
+GET /api/stats
+```
+
+Returns totals for each model, today and all time, plus daily totals for the last 31 days and the most recently used tags.
+
+#### Request
+
+```shell
+curl http://localhost:11434/api/stats
+```
+
+#### Response
+
+```json
+{
+  "since": "2026-10-22T10:37:44-07:00",
+  "today": "2026-10-23",
+  "today_models": [],
+  "all_time_models": [
+    {
+      "model": "llama3.2:latest",
+      "requests": 6,
+      "errors": 0,
+      "prompt_tokens": 192,
+      "prompt_cached_tokens": 74,
+      "output_tokens": 330,
+      "prompt_duration": 1094000000,
+      "output_duration": 3560000000,
+      "total_duration": 21600000000,
+      "load_duration": 16200000000,
+      "last_used": "2026-10-22T12:36:27-07:00",
+      "max_context_used": 139,
+      "max_context_window": 32768,
+      "context_length": 32768,
+      "memory_size": 6000000000,
+      "memory_vram": 6000000000,
+      "last": {
+        "at": "2026-10-22T12:36:27-07:00",
+        "prompt_tokens": 35,
+        "output_tokens": 64,
+        "load_duration": 1000000000,
+        "prompt_duration": 72000000,
+        "output_duration": 700000000,
+        "total_duration": 1800000000
+      }
+    }
+  ],
+  "active": 0,
+  "days": [{ "date": "2026-10-22", "requests": 6, "errors": 0, "output_tokens": 330 }],
+  "tags": [{ "tag": "cloud-test", "requests": 4, "errors": 0, "last_used": "2026-10-22T16:54:45-07:00" }],
+  "tags_total": 1
+}
+```
+
+Durations are in nanoseconds. Average speed is `output_tokens / output_duration`. The wait before the first word is `total_duration - output_duration`. When stats are turned off, the response has `"disabled": true` and empty lists.
+
+### Get logged requests
+
+```
+GET /api/stats/log
+```
+
+Returns logged requests, newest first, with totals for each model.
+
+#### Query parameters
+
+- `tag`: only requests with this tag. Leave it out for all requests.
+- `limit`: how many requests to return (default `100`, up to `1000`). The totals always cover every match.
+
+#### Request
+
+```shell
+curl "http://localhost:11434/api/stats/log?tag=cloud-test&limit=1"
+```
+
+#### Response
+
+```json
+{
+  "tag": "cloud-test",
+  "total": 2,
+  "models": [{ "model": "llama3.2:latest", "requests": 2, "errors": 0 }],
+  "requests": [
+    {
+      "at": "2026-10-22T16:54:45-07:00",
+      "model": "llama3.2:latest",
+      "tag": "cloud-test",
+      "context_length": 32768,
+      "prompt_tokens": 34,
+      "output_tokens": 50,
+      "load_duration": 1000000,
+      "prompt_duration": 10000000,
+      "output_duration": 600000000,
+      "total_duration": 649000000
+    }
+  ]
+}
+```
+
+Each entry in `models` has the same fields as in `/api/stats` (shortened here). When stats are turned off, the response has `"disabled": true`.
+
+### Reset usage stats
+
+```
+DELETE /api/stats
+```
+
+Clears all totals and the request log.
+
+#### Request
+
+```shell
+curl -X DELETE http://localhost:11434/api/stats
+```
+
+#### Response
+
+Returns a 200 OK if successful, or a 409 Conflict if stats are turned off.
+
+### Test suites
+
+```
+GET /api/stats/suites
+GET /api/stats/suite-runs
+POST /api/stats/suite-runs
+```
+
+Used by the dashboard's Tests page. `GET /api/stats/suites` returns the built-in suite and any valid suites in `~/.ollama/suites/`, plus a `problems` list for files that couldn't be used. The suite runs endpoints save and list finished test runs (the last 10). Saving requires `Content-Type: application/json`. A run larger than 2 MB returns 413, and a run that isn't valid returns 400.
 
 ## Generate Embedding
 

@@ -1,0 +1,112 @@
+---
+title: Usage stats
+---
+
+Ollama keeps track of how each model is used on your machine: how many requests it answered, how fast it wrote, how long you waited for the first word, how much of its context window it used, and how much memory it needed. Stats are saved, so they keep adding up across restarts.
+
+<Note>
+  Only counts and timings are saved, never prompts or answers. Stats stay on your machine. To turn them off, see [Turning stats off](#turning-stats-off).
+</Note>
+
+## See your stats
+
+### Terminal
+
+```
+ollama stats
+```
+
+This prints, for each model:
+
+- **Requests** and **errors**
+- **Avg first word**: the wait before an answer starts, including loading the model and reading the prompt
+- **Avg speed**: total tokens written ÷ total time spent writing. Loading and reading the prompt aren't included.
+- **Avg time**: the whole request, start to finish
+- **Total tokens in**, split into **newly read** and **reused** (parts of a chat Ollama had already processed), and **total tokens out**
+- **Max context**: the fullest any one request got, compared to the context window it ran in
+- **Memory needed**: memory the model used at its last request, even if it's no longer loaded
+
+It also shows **where the time goes** (loading the model, reading the prompt, writing the answer), whether each model ran on the GPU or partly on the CPU, the last request compared to the average, and your most recent tags.
+
+### Dashboard
+
+```
+ollama stats --web
+```
+
+This opens a dashboard in your browser at `http://localhost:11434/stats` with the same numbers as charts: requests per day, speed and wait by model, and where the time goes. It updates every few seconds and needs no internet connection.
+
+## Tag requests
+
+Tags group requests so you can look them up later, for example to compare models on the same prompts.
+
+```
+ollama run llama3.2 "Explain how clouds form" --tag cloud-test
+ollama run gemma3 "Explain how clouds form" --tag cloud-test
+ollama stats --tag cloud-test
+```
+
+`ollama stats --tag` shows totals for each model in the group, then each request. On the dashboard, pick the tag from the **Tags** section.
+
+Apps can tag requests too:
+
+- In Ollama's API, add `"tag": "cloud-test"` to a chat or generate request.
+- In any app, including ones that use the OpenAI or Anthropic format, send the header `X-Ollama-Tag: cloud-test`.
+
+Tags can use letters, numbers, spaces, and `- _ . : / @`, up to 64 characters. Each request has at most one tag:
+
+- If a request has both, the `tag` field wins over the header.
+- An invalid `tag` field fails the request with an error, since you asked for it directly. An invalid header is ignored, so an app's label can't break its chats.
+- When stats are turned off, tags are ignored.
+
+## Test models
+
+The dashboard's **Tests** page, at `http://localhost:11434/stats/tests`, runs a standard set of scenarios on the models you pick, so you can compare them without writing your own prompts.
+
+- **Performance** scenarios change one thing at a time: cold start, short, medium, and long input, short, medium, and long output, prompt reuse, thinking on and off, and context 50%, 90%, and overfull. They don't grade answers.
+- **Fact checks** grade answers, separately from speed. **Known answers** (math, logic, facts, comprehension, code) make the model reply in a fixed JSON shape using [structured outputs](/capabilities/structured-outputs), so grading is an exact comparison. **Following instructions** (length, format, required word, forbidden letter, case, only the answer) are checked by rules, since the format is what they test.
+
+Test requests are sent with the header `X-Ollama-Stats: test`. They're logged, so each run's speed details can be looked up by its tag, but they don't count toward your usage stats.
+
+You can add your own suites as JSON files in `~/.ollama/suites/`, in the same shape as the built-in one returned by `GET /api/stats/suites`.
+
+## Where stats are saved
+
+| File | What it holds |
+| --- | --- |
+| `~/.ollama/stats.json` | Totals per model, all time and for the last 31 days |
+| `~/.ollama/stats-log.jsonl` | One line per request, for tags and the request log. Keeps the last 90 days, up to 50,000 requests. |
+| `~/.ollama/stats-suite-runs.jsonl` | Test results from the Tests page. Keeps the last 10 runs. |
+
+Stats are saved every minute and when Ollama stops. Files are saved in the Ollama server's `.ollama` folder, which may be a different machine if you connect to Ollama remotely.
+
+If a file is damaged, Ollama keeps going instead of failing:
+
+- A damaged `stats.json` is renamed to `stats.json.corrupt` and the totals start fresh.
+- Damaged lines in `stats-log.jsonl` or `stats-suite-runs.jsonl` are skipped, and the rest is kept.
+
+To clear your usage totals and the request log:
+
+```
+ollama stats --reset
+```
+
+Saved test results on the Tests page aren't affected.
+
+## Turning stats off
+
+Start Ollama with `OLLAMA_NOSTATS` set:
+
+```
+OLLAMA_NOSTATS=1 ollama serve
+```
+
+Nothing is tracked or saved, `ollama stats` says stats are off, and the dashboard shows a notice.
+
+## Limits
+
+- Requests to [embedding](/capabilities/embeddings) models aren't counted yet, and neither are requests to models that only make decisions, such as image or safety models without a chat template.
+- A request that's stopped partway through, for example with Ctrl+C, isn't counted.
+- A request that's turned away before it reaches the model, for example because the model doesn't exist, isn't counted.
+- Requests to cloud models aren't counted, since they run on Ollama's servers.
+- If Ollama is shared on a network (`OLLAMA_HOST=0.0.0.0`), anyone who can reach it can see the stats and run tests, the same as the rest of Ollama's API.
