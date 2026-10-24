@@ -75,7 +75,8 @@ You can add your own suites as JSON files in `~/.ollama/suites/`, in the same sh
 Requests to [cloud models](/cloud), which run on Ollama's servers, are counted too, so you can compare them with your local models. They're listed under their own name, like `gpt-oss:120b-cloud`, and show **Cloud** as the processor.
 
 - **Wait before the first word** and **time** are measured on your computer, so they include the trip over the network. That's the wait you actually experience.
-- **Tokens** and **speed** come from the cloud's own numbers.
+- **Tokens** come from the cloud's own numbers.
+- **Speed** is timed on your computer, from the first piece of a streamed answer to the last. An answer that isn't streamed arrives all at once, so its speed is estimated from the cloud's own total time.
 - **Loading the model** and **memory** don't apply, and show as `-`.
 
 ## Where stats are saved

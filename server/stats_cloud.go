@@ -17,8 +17,12 @@ import (
 // records the request once the answer ends.
 //
 // Times are measured on this computer, so the wait before the first word
-// includes the trip over the network. Token counts and writing time come
-// from the cloud's own numbers. Loading and memory don't apply to cloud.
+// includes the trip over the network. Token counts come from the cloud. The
+// cloud doesn't report how long writing took, so for a streamed answer it's
+// timed here, from the first piece of the answer to the last. A non-streamed
+// answer arrives in one piece, so the cloud's own total time is used as the
+// writing time, which slightly understates the speed. Loading and memory
+// don't apply to cloud.
 //
 // Only Ollama's own chat and generate endpoints are metered. The OpenAI and
 // Anthropic compatible endpoints pass cloud requests straight through in
@@ -41,6 +45,10 @@ type cloudMeter struct {
 
 	line    []byte
 	tooLong bool
+
+	// firstAt is when the first piece of the answer arrived, and doneAt when
+	// the last one did. They time the writing of a streamed answer.
+	firstAt, doneAt time.Time
 
 	done    bool
 	failed  bool
@@ -107,8 +115,16 @@ func (m *cloudMeter) keep(p []byte) {
 // "done":true, or an error. Answer chunks are skipped without parsing.
 func (m *cloudMeter) endLine() {
 	line := bytes.TrimSpace(m.line)
+	long := m.tooLong
 	m.line, m.tooLong = m.line[:0], false
-	if !bytes.Contains(line, []byte(`"done":true`)) && !bytes.Contains(line, []byte(`"error"`)) {
+	if len(line) == 0 && !long {
+		return
+	}
+	done := bytes.Contains(line, []byte(`"done":true`))
+	if !done && m.firstAt.IsZero() {
+		m.firstAt = time.Now()
+	}
+	if !done && !bytes.Contains(line, []byte(`"error"`)) {
 		return
 	}
 	var v struct {
@@ -125,6 +141,7 @@ func (m *cloudMeter) endLine() {
 	}
 	if v.Done {
 		m.done = true
+		m.doneAt = time.Now()
 		m.metrics = v.Metrics
 	}
 }
@@ -145,12 +162,26 @@ func (m *cloudMeter) finish(c *gin.Context, status int) {
 
 	if m.done && !m.failed && status < 300 {
 		metrics := m.metrics
+		if metrics.EvalDuration == 0 {
+			metrics.EvalDuration = m.writingTime()
+		}
 		metrics.TotalDuration = time.Since(m.start)
 		metrics.LoadDuration = 0
 		m.u.record(m.model, metrics, m.info, false)
 		return
 	}
 	m.u.record(m.model, api.Metrics{}, m.info, true)
+}
+
+// writingTime is how long the answer took to write: timed here for a
+// streamed answer, or the cloud's own total for one that came in one piece.
+func (m *cloudMeter) writingTime() time.Duration {
+	if !m.firstAt.IsZero() {
+		if d := m.doneAt.Sub(m.firstAt); d >= time.Millisecond {
+			return d
+		}
+	}
+	return m.metrics.TotalDuration
 }
 
 type cloudMeterWriter struct {

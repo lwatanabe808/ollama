@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/ollama/ollama/api"
 )
 
 // fakeCloud stands in for Ollama's cloud. reply picks the status and body
@@ -174,4 +176,52 @@ func TestCloudMeterSkipsLongLines(t *testing.T) {
 	if got := findStats(t, m.u.snapshot().AllTimeModels, "m:cloud"); got.Requests != 1 || got.OutputTokens != 3 {
 		t.Errorf("after a long line, the final line should still be read: %+v", got)
 	}
+}
+
+// TestCloudMeterWritingTime covers the cloud's real answers, which have no
+// writing time (eval_duration) in them.
+func TestCloudMeterWritingTime(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	run := func(t *testing.T, feed func(m *cloudMeter)) api.ModelStats {
+		t.Helper()
+		now := time.Now()
+		m := &cloudMeter{u: newTestStats(t, &now), model: "m:cloud", info: statsRequestInfo{Cloud: true}}
+		m.begin()
+		feed(m)
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		c.Request = httptest.NewRequest(http.MethodPost, "/api/chat", nil)
+		m.finish(c, http.StatusOK)
+		return findStats(t, m.u.snapshot().AllTimeModels, "m:cloud")
+	}
+
+	t.Run("streamed answer is timed here", func(t *testing.T) {
+		got := run(t, func(m *cloudMeter) {
+			time.Sleep(30 * time.Millisecond) // the cloud reads the prompt
+			m.scan([]byte(`{"message":{"content":"Hel"},"done":false}` + "\n"))
+			time.Sleep(60 * time.Millisecond) // and writes the answer
+			m.scan([]byte(`{"message":{"content":"lo"},"done":false}` + "\n"))
+			m.scan([]byte(`{"done":true,"total_duration":5000000,"eval_count":20}` + "\n"))
+		})
+		if got.OutputDuration < 50*time.Millisecond || got.OutputDuration > 2*time.Second {
+			t.Errorf("writing time = %v, want about 60ms, timed from the first piece to the last", got.OutputDuration)
+		}
+		if wait := got.TotalDuration - got.OutputDuration; wait < 25*time.Millisecond {
+			t.Errorf("wait before the first word = %v, want at least the 30ms before the first piece", wait)
+		}
+		if got.TokensPerSecond() <= 0 {
+			t.Error("speed should be known for a streamed answer")
+		}
+	})
+
+	t.Run("one-piece answer uses the cloud's total", func(t *testing.T) {
+		got := run(t, func(m *cloudMeter) {
+			m.scan([]byte(`{"message":{"content":"Hello"},"done":true,"total_duration":400000000,"eval_count":40}`))
+		})
+		if got.OutputDuration != 400*time.Millisecond {
+			t.Errorf("writing time = %v, want the cloud's 400ms total", got.OutputDuration)
+		}
+		if tps := got.TokensPerSecond(); tps < 99 || tps > 101 {
+			t.Errorf("speed = %.1f tok/s, want 100", tps)
+		}
+	})
 }

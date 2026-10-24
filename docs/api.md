@@ -1872,7 +1872,7 @@ curl http://localhost:11434/api/stats
 }
 ```
 
-Cloud models have `"cloud": true`. Their `total_duration` is measured on this computer, so it includes the network, and they have no load time or memory. Durations are in nanoseconds. Average speed is `output_tokens / output_duration`. The wait before the first word is `total_duration - output_duration`. When stats are turned off, the response has `"disabled": true` and empty lists.
+Cloud models have `"cloud": true`. Their `total_duration` is measured on this computer, so it includes the network. Their `output_duration` is timed here for streamed answers, or taken from the cloud's own total for answers that aren't streamed. They have no load time or memory. Durations are in nanoseconds. Average speed is `output_tokens / output_duration`. The wait before the first word is `total_duration - output_duration`. When stats are turned off, the response has `"disabled": true` and empty lists.
 
 ### Get logged requests
 
