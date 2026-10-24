@@ -6,6 +6,7 @@
 
   var S = window.OllamaStats;
   var compact = S.compact;
+  var full = S.full;
   var truncate = S.truncate;
   var dur = S.dur;
   var speedOf = S.speedOf;
@@ -28,6 +29,8 @@
   // Result kinds saved with each run. "acc" is the earlier name for fact
   // checks, still read so older runs load.
   function isFact(r) { return r.kind === "fact" || r.kind === "acc"; }
+  // Older runs saved out of room as this text instead of a flag.
+  function outOfRoom(r) { return !r.pass && (r.out_of_room || r.got === "(ran out of room before answering)"); }
   function runHas(run, section) {
     return run.sections.indexOf(section) !== -1 || (section === "fact_checks" && run.sections.indexOf("accuracy") !== -1);
   }
@@ -230,17 +233,21 @@
     return chat(model, [{ role: "user", content: test.prompt }], opts, ctx.signal).then(function (r) {
       var text = Grading.cleanAnswer(r.message && r.message.content);
       var out = { tokens_out: r.eval_count || 0, total: r.total_duration || 0 };
+      // Used the whole token cap: usually a thinking model that kept
+      // thinking and never wrote its answer.
+      var usedAll = out.tokens_out >= Grading.FACT_CHECK_TOKENS;
       if (test.answer) {
         // Known answers only keep the answer itself.
         var g = Grading.gradeReply(test.answer, text);
         out.pass = g.pass;
-        out.got = g.got != null ? truncate(g.got, 80)
-          : (r.eval_count || 0) >= Grading.FACT_CHECK_TOKENS ? "(ran out of room before answering)" : "(no usable answer)";
+        out.got = g.got != null ? truncate(g.got, 80) : usedAll ? null : "(no usable answer)";
+        out.out_of_room = g.got == null && usedAll;
       } else {
         // For free-form tests the reply is the answer (the sentence, the code).
         out.pass = Grading.check(test, text);
         out.got = truncate(text.replace(/\s+/g, " "), 40);
         out.answer = text.slice(0, 800);
+        out.out_of_room = !text && usedAll;
       }
       return out;
     });
@@ -481,10 +488,16 @@
           td.appendChild(el("span", { class: "fail" }, "Error"));
           td.appendChild(el("span", { class: "sub" }, truncate(r.error, 60)));
         } else {
-          // Pass or Fail by default; click to see their answer.
+          // Pass or Fail by default; click to see their answer. Out of
+          // room is a fail too, labeled so it isn't mistaken for a wrong
+          // answer.
           var d = el("details");
-          d.appendChild(el("summary", { class: r.pass ? "pass" : "fail" }, r.pass ? "✓ Pass" : "✗ Fail"));
-          if (test.answer) {
+          var room = outOfRoom(r);
+          d.appendChild(el("summary", { class: r.pass ? "pass" : "fail" }, r.pass ? "✓ Pass" : room ? "✗ Out of room" : "✗ Fail"));
+          if (room) {
+            d.appendChild(el("p", null, "Used all " + full(r.tokens_out) + " tokens before giving an answer, usually by thinking too long."));
+            if (test.answer) d.appendChild(el("p", null, "Expected: " + Grading.expected(test.answer)));
+          } else if (test.answer) {
             d.appendChild(el("p", null, "Answer: " + (r.got != null ? r.got : "–")));
             if (!r.pass) d.appendChild(el("p", null, "Expected: " + Grading.expected(test.answer)));
           } else {
@@ -498,7 +511,7 @@
     }));
     fixColumns(t2, ["30%", "76px"]);
     box.appendChild(wrapTable(t2));
-    box.appendChild(el("p", { class: "hint", style: "margin-top: 12px" }, "Click Pass or Fail to see the model's answer, and what was expected if it's wrong. Code is checked for recognizable patterns, not run."));
+    box.appendChild(el("p", { class: "hint", style: "margin-top: 12px" }, "Click a result to see the model's answer, and what was expected if it's wrong. Out of room means the model used all its tokens before answering; it counts as a fail. Code is checked for recognizable patterns, not run."));
   }
 
   // Draws one results tab. If the selected run didn't include that section,
