@@ -620,6 +620,15 @@
     }));
   }
 
+  // paramText shows a parameter count like "3.2B parameters" from Ollama's
+  // "3.2B" or "268.10M". B is billions and M millions of parameters.
+  function paramText(p) {
+    var m = String(p || "").trim().match(/^([\d.]+)\s*([KMBT])$/i);
+    if (!m) return "";
+    var n = Number(m[1]);
+    return (n >= 10 || n % 1 === 0 ? Math.round(n) : n.toFixed(1)) + m[2].toUpperCase() + " parameters";
+  }
+
   function drawModels() {
     var saved = [];
     try { saved = JSON.parse(localStorage.getItem("ollama-tests-models") || "[]"); } catch (e) { /* storage blocked */ }
@@ -632,7 +641,8 @@
       if (saved.indexOf(m.name) !== -1) input.checked = true;
       lab.appendChild(input);
       lab.appendChild(document.createTextNode(m.name));
-      lab.appendChild(el("span", { class: "meta" }, m.cloud ? "cloud" : bytes(m.size)));
+      var meta = [paramText(m.params), m.cloud ? "cloud" : bytes(m.size)].filter(Boolean).join(" · ");
+      lab.appendChild(el("span", { class: "meta" }, meta));
       if (m.thinking) lab.appendChild(el("span", { class: "badge" }, "thinking"));
       box.appendChild(lab);
     });
@@ -672,7 +682,8 @@
       T.models = (res[1].models || []).filter(function (m) {
         return !m.capabilities || m.capabilities.indexOf("completion") !== -1;
       }).map(function (m) {
-        return { name: m.name, size: m.size, cloud: !!m.remote_host, thinking: (m.capabilities || []).indexOf("thinking") !== -1 };
+        return { name: m.name, size: m.size, params: (m.details || {}).parameter_size, cloud: !!m.remote_host,
+          thinking: (m.capabilities || []).indexOf("thinking") !== -1 };
       });
       drawSuite();
       drawModels();
