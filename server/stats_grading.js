@@ -139,11 +139,28 @@
     return String(ans.value);
   }
 
+  // The question for a known-answer test, with the JSON shape spelled out.
+  // Local models are held to the shape by Ollama, but cloud models aren't,
+  // so this asks for it in words too.
+  function answerPrompt(prompt, ans) {
+    return prompt + "\n\nReply with only a JSON object that matches this JSON schema, and nothing else:\n" +
+      JSON.stringify(answerSchema(ans));
+  }
+
+  // Reads the JSON object a reply holds: the whole reply, or the object
+  // inside it when a model adds a code block or a sentence around it.
+  function parseReply(text) {
+    text = String(text || "").trim();
+    try { return JSON.parse(text); } catch (e) { /* look inside */ }
+    var start = text.indexOf("{"), end = text.lastIndexOf("}");
+    if (start === -1 || end <= start) return null;
+    try { return JSON.parse(text.slice(start, end + 1)); } catch (e) { return null; }
+  }
+
   // Grades a known-answer reply (the JSON text the model wrote). Returns
   // whether it passed and the answer to show.
   function gradeReply(ans, text) {
-    var parsed = null;
-    try { parsed = JSON.parse(text); } catch (e) { /* not JSON */ }
+    var parsed = parseReply(text);
     if (!parsed || typeof parsed !== "object" || !("answer" in parsed)) return { pass: false, got: null };
     return { pass: gradeAnswer(ans, parsed.answer), got: showValue(parsed.answer) };
   }
@@ -159,6 +176,7 @@
     cleanAnswer: cleanAnswer,
     check: check,
     answerSchema: answerSchema,
+    answerPrompt: answerPrompt,
     gradeAnswer: gradeAnswer,
     gradeReply: gradeReply,
     expected: expected,

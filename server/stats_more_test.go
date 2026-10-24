@@ -394,6 +394,11 @@ eq("reply fields shown", G.gradeReply(fields, reply({ meet_time: "11:36", distan
 eq("reply not json", G.gradeReply(num, "The answer is 42"), { pass: false, got: null });
 eq("reply cut off", G.gradeReply(num, '{"reasoning":"lon'), { pass: false, got: null });
 eq("reply no answer", G.gradeReply(num, '{"reasoning":"r"}'), { pass: false, got: null });
+eq("reply in a code block", G.gradeReply(num, "` + "```" + `json\n" + reply(42) + "\n` + "```" + `"), { pass: true, got: "42" });
+eq("reply with a sentence around it", G.gradeReply(num, "Here you go: " + reply(42) + " Hope that helps."), { pass: true, got: "42" });
+eq("reply plain text", G.gradeReply({ type: "text", value: "Au" }, "The chemical symbol for gold is **Au**."), { pass: false, got: null });
+eq("prompt asks for the shape", G.answerPrompt("What is 6x7?", num).indexOf('"required":["reasoning","answer"]') !== -1, true);
+eq("prompt keeps the question", G.answerPrompt("What is 6x7?", num).indexOf("What is 6x7?") === 0, true);
 
 // Schemas
 const s = G.answerSchema(num);

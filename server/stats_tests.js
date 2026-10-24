@@ -94,19 +94,29 @@
     return fetch(url, { method: "POST", headers: headers || { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: signal })
       .then(readJSON);
   }
+  // timed sends a model request and notes how long it took from here, in
+  // nanoseconds. Cloud models don't report their own reading and writing
+  // times, so this is the time they're judged by.
+  function timed(url, body, signal) {
+    var start = performance.now();
+    return postJSON(url, body, signal, TEST_HEADERS).then(function (r) {
+      r.elapsed = Math.round((performance.now() - start) * 1e6);
+      return r;
+    });
+  }
   function chat(model, messages, opts, signal) {
     var body = { model: model, messages: messages, stream: false, options: Object.assign({}, SAMPLING, opts.options) };
     if (opts.tag) body.tag = opts.tag;
     if (opts.think !== undefined) body.think = opts.think;
     if (opts.format) body.format = opts.format;
-    return postJSON("/api/chat", body, signal, TEST_HEADERS);
+    return timed("/api/chat", body, signal);
   }
   // Output scenarios continue a plain number list with no chat template, so
   // every model keeps writing until the token cap instead of stopping early.
   function generateRaw(model, prompt, opts, signal) {
     var body = { model: model, prompt: prompt, raw: true, stream: false, options: Object.assign({}, SAMPLING, opts.options) };
     if (opts.tag) body.tag = opts.tag;
-    return postJSON("/api/generate", body, signal, TEST_HEADERS);
+    return timed("/api/generate", body, signal);
   }
 
   function stopped() { return new DOMException("Stopped", "AbortError"); }
@@ -139,6 +149,7 @@
   function metricsOf(r) {
     return {
       load: r.load_duration || 0, read: r.prompt_eval_duration || 0, write: r.eval_duration || 0, total: r.total_duration || 0,
+      elapsed: r.elapsed || 0,
       tokens_in: r.prompt_eval_count || 0, tokens_cached: r.prompt_eval_cached_count || 0, tokens_out: r.eval_count || 0
     };
   }
@@ -184,12 +195,15 @@
   function runPerformance(model, info, sc, ctx) {
     var signal = ctx.signal;
     if (sc.thinking_only && !info.thinking) return Promise.resolve({ skipped: "Not a thinking model" });
+    // A cloud model can't be unloaded or given a smaller window.
+    if (info.cloud && (sc.cold || sc.window)) return Promise.resolve({ skipped: "Doesn't apply to cloud models" });
     var opts = { tag: ctx.tag, think: sc.think, options: { num_predict: sc.output_tokens } };
     if (sc.window) opts.options.num_ctx = sc.window;
 
     // Load the model with the right window first, so loading time doesn't
     // leak into reading or writing (except for the cold start).
     function ready() {
+      if (info.cloud) return Promise.resolve();
       if (sc.cold) return unload(model, signal).then(function () { ctx.loadedWindow[model] = 0; });
       var want = sc.window || 0;
       if (ctx.loadedWindow[model] === want) return Promise.resolve();
@@ -221,7 +235,7 @@
 
     var results = [];
     function loop(i) {
-      if (i >= ctx.repeats) return Promise.resolve(Object.assign({ runs: ctx.repeats }, average(results)));
+      if (i >= ctx.repeats) return Promise.resolve(Object.assign({ runs: ctx.repeats, cloud: !!info.cloud }, average(results)));
       return ready().then(once).then(function (m) { results.push(m); return loop(i + 1); });
     }
     return loop(0);
@@ -229,8 +243,12 @@
 
   function runFactCheck(model, test, ctx) {
     var opts = { tag: ctx.tag, options: { num_predict: Grading.FACT_CHECK_TOKENS } };
-    if (test.answer) opts.format = Grading.answerSchema(test.answer);
-    return chat(model, [{ role: "user", content: test.prompt }], opts, ctx.signal).then(function (r) {
+    var prompt = test.prompt;
+    if (test.answer) {
+      opts.format = Grading.answerSchema(test.answer);
+      prompt = Grading.answerPrompt(test.prompt, test.answer);
+    }
+    return chat(model, [{ role: "user", content: prompt }], opts, ctx.signal).then(function (r) {
       var text = Grading.cleanAnswer(r.message && r.message.content);
       var out = { tokens_out: r.eval_count || 0, total: r.total_duration || 0 };
       // Used the whole token cap: usually a thinking model that kept
@@ -345,6 +363,14 @@
     if (!r) return { main: "–" };
     if (r.skipped) return { main: "Skipped", sub: r.skipped, cls: "skip" };
     if (r.error) return { main: "Error", sub: truncate(r.error, 60), cls: "fail" };
+    if (totalOnly(r)) {
+      // Cloud models only give the whole time, measured here, network
+      // included. It isn't the same measure as a local model's reading or
+      // writing time, so it's never marked fastest.
+      var what = metricOf(sc) === "reuse" ? pct(reused(r.tokens_cached, r.tokens_in)) + " reused · " :
+        metricOf(sc) === "write" || metricOf(sc) === "think" ? compact(r.tokens_out) + " tokens · " : "";
+      return { main: dur(r.elapsed || r.total), sub: what + "total time (cloud)" };
+    }
     switch (metricOf(sc)) {
       case "load": return { main: dur(r.load), sub: "total " + dur(r.total), key: r.load };
       case "read": return { main: dur(r.read), sub: compact(r.tokens_in) + " tokens · " + rateText(r.tokens_in - r.tokens_cached, r.read), key: r.read };
@@ -356,6 +382,11 @@
           (r.tokens_in < r.sent * 0.97 ? ", oldest dropped" : ""), key: r.read };
     }
   }
+
+  // totalOnly is true for results with no reading or writing time: cloud
+  // models. Runs saved before cloud results were flagged are spotted by the
+  // missing times.
+  function totalOnly(r) { return r.cloud || (!r.load && !r.read && !r.write && r.total > 0); }
 
   // Gives a results table fixed widths for its first columns; the model
   // columns split what's left evenly.
@@ -406,7 +437,7 @@
       fixColumns(t, ["16%", "24%"]);
       box.appendChild(wrapTable(t));
     });
-    box.appendChild(el("p", { class: "hint", style: "margin-top: 12px" }, "Bold marks the fastest model for each scenario. Times are averages when a scenario ran more than once."));
+    box.appendChild(el("p", { class: "hint", style: "margin-top: 12px" }, "Bold marks the fastest model for each scenario. Times are averages when a scenario ran more than once. Cloud models only report their total time, measured from this computer, so they're shown separately and never marked fastest."));
   }
 
   // Score color bands for the fact check summary.
@@ -601,7 +632,7 @@
       if (saved.indexOf(m.name) !== -1) input.checked = true;
       lab.appendChild(input);
       lab.appendChild(document.createTextNode(m.name));
-      lab.appendChild(el("span", { class: "meta" }, bytes(m.size)));
+      lab.appendChild(el("span", { class: "meta" }, m.cloud ? "cloud" : bytes(m.size)));
       if (m.thinking) lab.appendChild(el("span", { class: "badge" }, "thinking"));
       box.appendChild(lab);
     });
@@ -641,7 +672,7 @@
       T.models = (res[1].models || []).filter(function (m) {
         return !m.capabilities || m.capabilities.indexOf("completion") !== -1;
       }).map(function (m) {
-        return { name: m.name, size: m.size, thinking: (m.capabilities || []).indexOf("thinking") !== -1 };
+        return { name: m.name, size: m.size, cloud: !!m.remote_host, thinking: (m.capabilities || []).indexOf("thinking") !== -1 };
       });
       drawSuite();
       drawModels();
