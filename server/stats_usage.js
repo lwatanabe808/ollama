@@ -181,7 +181,7 @@
     if (!rows.length) { box.replaceChildren(el("p", { class: "hint" }, emptyText)); return; }
 
     var W = Math.max(box.clientWidth, 260), rowH = 34, bh = 18;
-    var nameW = Math.min(170, Math.max(90, W * 0.36)), valueW = 76;
+    var nameW = Math.min(170, Math.max(90, W * 0.36)), valueW = 96;
     var plotW = W - nameW - valueW, H = rows.length * rowH;
     var max = Math.max.apply(null, rows.map(valueOf));
     var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, height: H, role: "img",
@@ -445,7 +445,7 @@
 
     var empty = "No requests " + label + " yet.";
     if (!tagged) drawDays(st);
-    drawModelBars("chart-speed", "Average speed by model", models, tps, function (m) { return tps(m).toFixed(1); },
+    drawModelBars("chart-speed", "Average speed by model", models, tps, function (m) { return tps(m).toFixed(1) + " tok/s"; },
       function (m) { return [tps(m).toFixed(1) + " tokens per second", full(m.output_tokens) + " tokens written"]; }, empty);
     drawModelBars("chart-wait", "Average wait before first word", models, avgWait, function (m) { return dur(avgWait(m)); },
       function (m) { return [dur(avgWait(m)) + " average wait", full(m.requests) + " requests"]; }, empty, true);
