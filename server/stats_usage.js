@@ -171,10 +171,13 @@
     box.replaceChildren(svg);
   }
 
-  // Horizontal bars, one per model, with the value at the tip.
-  function drawModelBars(boxId, title, models, valueOf, labelOf, tipLines, emptyText) {
+  // Horizontal bars, one per model, with the value at the tip. The best
+  // model goes on top: the highest value, or the lowest when lowerIsBetter.
+  function drawModelBars(boxId, title, models, valueOf, labelOf, tipLines, emptyText, lowerIsBetter) {
     var box = $(boxId);
-    var rows = models.filter(function (m) { return valueOf(m) > 0; }).sort(function (a, b) { return valueOf(b) - valueOf(a); });
+    var rows = models.filter(function (m) { return valueOf(m) > 0; }).sort(function (a, b) {
+      return lowerIsBetter ? valueOf(a) - valueOf(b) : valueOf(b) - valueOf(a);
+    });
     if (!rows.length) { box.replaceChildren(el("p", { class: "hint" }, emptyText)); return; }
 
     var W = Math.max(box.clientWidth, 260), rowH = 34, bh = 18;
@@ -445,7 +448,7 @@
     drawModelBars("chart-speed", "Average speed by model", models, tps, function (m) { return tps(m).toFixed(1); },
       function (m) { return [tps(m).toFixed(1) + " tokens per second", full(m.output_tokens) + " tokens written"]; }, empty);
     drawModelBars("chart-wait", "Average wait before first word", models, avgWait, function (m) { return dur(avgWait(m)); },
-      function (m) { return [dur(avgWait(m)) + " average wait", full(m.requests) + " requests"]; }, empty);
+      function (m) { return [dur(avgWait(m)) + " average wait", full(m.requests) + " requests"]; }, empty, true);
     drawTimeChart(models);
     drawTimeTable(models);
     drawCost(models, label);
