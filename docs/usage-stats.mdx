@@ -70,6 +70,14 @@ Test requests are sent with the header `X-Ollama-Stats: test`. They're logged, s
 
 You can add your own suites as JSON files in `~/.ollama/suites/`, in the same shape as the built-in one returned by `GET /api/stats/suites`.
 
+## Cloud models
+
+Requests to [cloud models](/cloud), which run on Ollama's servers, are counted too, so you can compare them with your local models. They're listed under their own name, like `gpt-oss:120b-cloud`, and show **Cloud** as the processor.
+
+- **Wait before the first word** and **time** are measured on your computer, so they include the trip over the network. That's the wait you actually experience.
+- **Tokens** and **speed** come from the cloud's own numbers.
+- **Loading the model** and **memory** don't apply, and show as `-`.
+
 ## Where stats are saved
 
 | File | What it holds |
@@ -110,5 +118,5 @@ Nothing is tracked or saved, `ollama stats` says stats are off, and the dashboar
 - Requests to [embedding](/capabilities/embeddings) models aren't counted yet, and neither are requests to models that only make decisions, such as image or safety models without a chat template.
 - A request that's stopped partway through, for example with Ctrl+C, isn't counted.
 - A request that's turned away before it reaches the model, for example because the model doesn't exist, isn't counted.
-- Requests to cloud models aren't counted, since they run on Ollama's servers.
+- Requests to cloud models made through the OpenAI or Anthropic compatible endpoints aren't counted yet. Ones made with `ollama run` or Ollama's own API are; see [Cloud models](#cloud-models).
 - If Ollama is shared on a network (`OLLAMA_HOST=0.0.0.0`), anyone who can reach it can see the stats and run tests, the same as the rest of Ollama's API.

@@ -178,6 +178,14 @@ func proxyCloudRequest(c *gin.Context, body []byte, disabledOperation string) {
 }
 
 func proxyCloudRequestWithPath(c *gin.Context, body []byte, path string, disabledOperation string) {
+	// status stays 0 unless the request reaches the cloud.
+	status := 0
+	meter := cloudMeterFrom(c)
+	if meter != nil {
+		meter.begin()
+		defer func() { meter.finish(c, status) }()
+	}
+
 	if disabled, _ := internalcloud.Status(); disabled {
 		c.JSON(http.StatusForbidden, gin.H{"error": internalcloud.DisabledError(disabledOperation)})
 		return
@@ -223,11 +231,15 @@ func proxyCloudRequestWithPath(c *gin.Context, body []byte, path string, disable
 		return
 	}
 	defer resp.Body.Close()
+	status = resp.StatusCode
 
 	copyProxyResponseHeaders(c.Writer.Header(), resp.Header)
 	c.Status(resp.StatusCode)
 
 	var bodyWriter http.ResponseWriter = c.Writer
+	if meter != nil {
+		bodyWriter = meter.writer(bodyWriter)
+	}
 	var framedWriter *jsonlFramingResponseWriter
 	// TEMP(drifkin): only needed on the cloud-proxied first leg of Anthropic
 	// web_search fallback (which is a path we're removing soon). Local

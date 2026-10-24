@@ -345,6 +345,7 @@ func (s *Server) GenerateHandler(c *gin.Context) {
 	}
 
 	if modelRef.Source == modelSourceCloud {
+		s.meterCloud(c, strings.TrimSpace(req.Model))
 		// TODO(drifkin): evaluate an `/api/*` passthrough for cloud where the
 		// original body (modulo model name normalization) is sent to cloud.
 		req.Model = modelRef.Base
@@ -3058,6 +3059,9 @@ func (s *Server) ChatHandler(c *gin.Context) {
 	}
 
 	if modelRef.Source == modelSourceCloud {
+		if !c.GetBool(cloudWebSearchOrchestrationKey) {
+			s.meterCloud(c, strings.TrimSpace(req.Model))
+		}
 		req.Model = modelRef.Base
 		req.Runner = ""
 		if c.GetBool(cloudWebSearchOrchestrationKey) {

@@ -141,6 +141,7 @@ type statsRequestInfo struct {
 	MemoryVRAM    uint64
 	Tag           string
 	Test          bool // sent by a test tool; logged but not counted as usage
+	Cloud         bool // run on Ollama's servers; see stats_cloud.go
 }
 
 // statsInfoFor gathers what the stats need about a request: its tag, whether
@@ -173,6 +174,7 @@ func requestStatsFor(m api.Metrics, info statsRequestInfo, at time.Time) api.Req
 		PromptDuration: m.PromptEvalDuration,
 		OutputDuration: m.EvalDuration,
 		TotalDuration:  m.TotalDuration,
+		Cloud:          info.Cloud,
 	}
 	if m.PromptEvalCachedCount != nil {
 		r.PromptCachedTokens = int64(*m.PromptEvalCachedCount)
@@ -197,6 +199,9 @@ func copyInt64(p *int64) *int64 {
 // both for the saved totals and for totals rebuilt from the log.
 func addRequest(s *api.ModelStats, r api.RequestStats, failed bool) {
 	s.Requests++
+	if r.Cloud {
+		s.Cloud = true
+	}
 	if r.At.After(s.LastUsed) {
 		s.LastUsed = r.At
 	}

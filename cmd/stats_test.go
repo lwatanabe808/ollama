@@ -321,6 +321,7 @@ func TestStatsProcessor(t *testing.T) {
 		{api.ModelStats{MemorySize: 1000, MemoryVRAM: v(1000)}, "100% GPU"},
 		{api.ModelStats{MemorySize: 1000, MemoryVRAM: v(0)}, "100% CPU"},
 		{api.ModelStats{MemorySize: 1000, MemoryVRAM: v(520)}, "48%/52% CPU/GPU"},
+		{api.ModelStats{Cloud: true}, "Cloud"},
 	} {
 		if got := statsProcessor(tt.m); got != tt.want {
 			t.Errorf("statsProcessor(%+v) = %q, want %q", tt.m, got, tt.want)

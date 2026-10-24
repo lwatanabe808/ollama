@@ -1872,7 +1872,7 @@ curl http://localhost:11434/api/stats
 }
 ```
 
-Durations are in nanoseconds. Average speed is `output_tokens / output_duration`. The wait before the first word is `total_duration - output_duration`. When stats are turned off, the response has `"disabled": true` and empty lists.
+Cloud models have `"cloud": true`. Their `total_duration` is measured on this computer, so it includes the network, and they have no load time or memory. Durations are in nanoseconds. Average speed is `output_tokens / output_duration`. The wait before the first word is `total_duration - output_duration`. When stats are turned off, the response has `"disabled": true` and empty lists.
 
 ### Get logged requests
 

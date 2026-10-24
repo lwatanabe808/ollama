@@ -996,6 +996,9 @@ type ModelStats struct {
 	// MemoryVRAM is how much of MemorySize was in GPU memory at the last
 	// request, in bytes. The rest ran on the CPU. Nil means unknown.
 	MemoryVRAM *int64 `json:"memory_vram,omitempty"`
+	// Cloud is set for cloud models, which run on Ollama's servers. Their
+	// times include the network, and loading and memory don't apply.
+	Cloud bool `json:"cloud,omitempty"`
 	// Last holds the numbers from the most recent successful request, so it
 	// can be compared to the averages.
 	Last *RequestStats `json:"last,omitempty"`
@@ -1016,6 +1019,9 @@ type RequestStats struct {
 	PromptDuration     time.Duration `json:"prompt_duration,omitempty"`
 	OutputDuration     time.Duration `json:"output_duration"`
 	TotalDuration      time.Duration `json:"total_duration"`
+	// Cloud is set for cloud models, which run on Ollama's servers. Their
+	// times are measured on this computer, so they include the network.
+	Cloud bool `json:"cloud,omitempty"`
 }
 
 // PromptNewTokens is how many prompt tokens were read fresh, not reused.

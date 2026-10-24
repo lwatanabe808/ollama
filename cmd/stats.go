@@ -305,9 +305,12 @@ func renderTimeBreakdown(w io.Writer, models []api.ModelStats) {
 }
 
 // statsProcessor shows where the model ran, the same way 'ollama ps' does.
+// Cloud models run on Ollama's servers.
 func statsProcessor(m api.ModelStats) string {
 	share, ok := m.GPUShare()
 	switch {
+	case m.Cloud:
+		return "Cloud"
 	case !ok:
 		return "-"
 	case share >= 1:

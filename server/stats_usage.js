@@ -61,6 +61,7 @@
   function fillWindow(m) { return m.max_context_window || m.context_length || 0; }
   // Same wording as `ollama ps`.
   function processor(m) {
+    if (m.cloud) return "Cloud";
     if (m.memory_vram == null || !(m.memory_size > 0) || m.memory_vram > m.memory_size) return "–";
     var gpu = m.memory_vram / m.memory_size;
     if (gpu >= 1) return "100% GPU";
