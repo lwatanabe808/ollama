@@ -414,7 +414,9 @@
     $("tag-banner").hidden = !tagged;
     $("tags-card").hidden = tagged;
     $("range-control").hidden = tagged;
-    $("days-card").hidden = tagged;
+    // The 30-day chart doesn't fit the Today view or a tag's requests.
+    var showDays = !tagged && range !== "today";
+    $("days-card").hidden = !showDays;
     $("log-card").hidden = !tagged;
     $("last-card").hidden = tagged;
     if (!tagged) drawTags(st);
@@ -451,7 +453,7 @@
     $("t-errors-note").textContent = tot.requests ? (tot.errors / tot.requests * 100).toFixed(1) + "% of requests" : "";
 
     var empty = "No requests " + label + " yet.";
-    if (!tagged) drawDays(st);
+    if (showDays) drawDays(st);
     drawModelBars("chart-speed", "Average speed by model", models, tps, function (m) { return tps(m).toFixed(1) + " tok/s"; },
       function (m) { return [tps(m).toFixed(1) + " tokens per second", full(m.output_tokens) + " tokens written"]; }, empty);
     drawModelBars("chart-wait", "Average wait before first word", models, avgWait, function (m) { return dur(avgWait(m)); },
