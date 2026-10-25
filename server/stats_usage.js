@@ -72,12 +72,16 @@
 
   // ---------- cost estimate ----------
 
-  // Claude's API prices per million tokens, as of October 2026. Sonnet is
-  // the default: Anthropic's everyday model.
+  // Claude and OpenAI API prices per million tokens, as of October 2026.
+  // Claude Sonnet is the default: Anthropic's everyday model.
   var PRICE_PRESETS = {
     "claude-sonnet": { name: "Claude Sonnet 5.5", input: 2, output: 10 },
     "claude-opus": { name: "Claude Opus 5.5", input: 4, output: 20 },
-    "claude-haiku": { name: "Claude Haiku 5.5", input: 0.1, output: 0.5 }
+    "claude-haiku": { name: "Claude Haiku 5.5", input: 0.1, output: 0.5 },
+    "chatgpt": { name: "ChatGPT (chat-latest)", input: 5, output: 30 },
+    "gpt-astra": { name: "GPT-6 Astra", input: 10, output: 50 },
+    "gpt-sol": { name: "GPT-6.1 Sol", input: 2, output: 10 },
+    "gpt-luna": { name: "GPT-6 Luna", input: 0.1, output: 0.5 }
   };
   var DEFAULT_PRESET = "claude-sonnet";
   var prices = { preset: DEFAULT_PRESET, input: 2, output: 10 };
