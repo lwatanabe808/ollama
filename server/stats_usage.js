@@ -439,16 +439,14 @@
     $("live-dot").classList.toggle("on", st.active > 0);
     setStatus(st.active === 1 ? "1 request running" : st.active > 1 ? st.active + " requests running" : "Idle");
 
-    var tot = { requests: 0, errors: 0, tokens: 0, wait: 0, ok: 0 };
+    var tot = { requests: 0, errors: 0, tokens: 0 };
     models.forEach(function (m) {
       tot.requests += m.requests; tot.errors += m.errors; tot.tokens += m.output_tokens;
-      tot.ok += ok(m); tot.wait += waitOf(m.total_duration, m.output_duration);
     });
     $("t-requests").textContent = full(tot.requests);
     $("t-requests-note").textContent = models.length + (models.length === 1 ? " model " : " models ") + label;
     $("t-tokens").textContent = compact(tot.tokens);
     $("t-tokens-note").textContent = tot.tokens >= 1000 ? full(tot.tokens) + " exactly" : "Across all models";
-    $("t-wait").textContent = tot.ok ? dur(tot.wait / tot.ok) : "–";
     $("t-errors").textContent = full(tot.errors);
     $("t-errors-note").textContent = tot.requests ? (tot.errors / tot.requests * 100).toFixed(1) + "% of requests" : "";
 
