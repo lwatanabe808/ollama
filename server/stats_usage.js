@@ -295,10 +295,9 @@
 
   function drawModelsTable(models) {
     fillTable($("models-table"),
-      ["Model", "Requests", "Errors", "Avg first word", "Avg speed", "Avg time", "Total tokens in", "Total tokens out", "Max context", "Memory needed", "Processor", "Last used"],
+      ["Model", "Requests", "Errors", "Avg first word", "Avg speed", "Avg time", "Total tokens in", "Reused", "Total tokens out", "Max context", "Memory needed", "Processor", "Last used"],
       models.map(function (m) {
-        // Tokens in, with how much was reused from earlier work instead of
-        // read again.
+        // Reused tokens came from earlier work instead of being read again.
         var share = reused(m.prompt_cached_tokens, m.prompt_tokens);
         return row([
           { text: m.model },
@@ -307,7 +306,8 @@
           { text: dur(avgWait(m)) },
           { text: speedText(m.output_tokens, m.output_duration) },
           { text: dur(avgTime(m)) },
-          { text: compact(m.prompt_tokens) + (share ? " (" + pct(share) + " reused)" : "") },
+          { text: compact(m.prompt_tokens) },
+          { text: m.prompt_cached_tokens ? compact(m.prompt_cached_tokens) + " (" + pct(share) + ")" : "0" },
           { text: compact(m.output_tokens) },
           { text: contextText(m) },
           { text: bytes(m.memory_size) },
