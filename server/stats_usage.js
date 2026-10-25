@@ -220,7 +220,9 @@
       return TIME_PARTS.reduce(function (sum, p) { return sum + avgOf(m, m[p.key]); }, 0);
     }));
     var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, height: H, role: "img",
-      "aria-label": "Average time per request by model, split into loading, reading, and writing. Values are in the table below." });
+      "aria-label": "Average time per request by model, split into loading, reading, and writing. " + rows.map(function (m) {
+        return m.model + ": " + TIME_PARTS.map(function (p) { return p.name.toLowerCase() + " " + dur(avgOf(m, m[p.key])); }).join(", ");
+      }).join("; ") });
     svg.appendChild(svgEl("line", { x1: nameW, x2: nameW, y1: 0, y2: H, stroke: "var(--baseline)", "stroke-width": 1 }));
     rows.forEach(function (m, i) {
       var y = i * rowH, cy = y + rowH / 2, x = nameW, sum = 0;
@@ -246,20 +248,6 @@
 
   // ---------- tables and notes ----------
 
-  function drawTimeTable(models) {
-    fillTable($("time-table"), ["Model", "Avg loading model", "Avg reading prompt", "Avg writing answer", "Prompt reused", "Processor"],
-      models.filter(function (m) { return ok(m) > 0; }).map(function (m) {
-        return row([
-          { text: m.model },
-          { text: dur(avgOf(m, m.load_duration)) },
-          { text: dur(avgOf(m, m.prompt_duration)) },
-          { text: dur(avgOf(m, m.output_duration)) },
-          { text: pct(reused(m.prompt_cached_tokens, m.prompt_tokens)) },
-          { text: processor(m) }
-        ]);
-      }));
-  }
-
   function drawCost(models, label) {
     var tin = 0, tout = 0;
     models.forEach(function (m) { tin += m.prompt_tokens; tout += m.output_tokens; });
@@ -276,8 +264,11 @@
 
   function drawModelsTable(models) {
     fillTable($("models-table"),
-      ["Model", "Requests", "Errors", "Avg first word", "Avg speed", "Avg time", "Total tokens in", "Newly read", "Reused", "Total tokens out", "Max context", "Memory needed", "Last used"],
+      ["Model", "Requests", "Errors", "Avg first word", "Avg speed", "Avg time", "Total tokens in", "Total tokens out", "Max context", "Memory needed", "Processor", "Last used"],
       models.map(function (m) {
+        // Tokens in, with how much was reused from earlier work instead of
+        // read again.
+        var share = reused(m.prompt_cached_tokens, m.prompt_tokens);
         return row([
           { text: m.model },
           { text: full(m.requests) },
@@ -285,12 +276,11 @@
           { text: dur(avgWait(m)) },
           { text: speedText(m.output_tokens, m.output_duration) },
           { text: dur(avgTime(m)) },
-          { text: compact(m.prompt_tokens) },
-          { text: compact(newRead(m.prompt_tokens, m.prompt_cached_tokens)) },
-          { text: compact(m.prompt_cached_tokens) },
+          { text: compact(m.prompt_tokens) + (share ? " (" + pct(share) + " reused)" : "") },
           { text: compact(m.output_tokens) },
           { text: contextText(m) },
           { text: bytes(m.memory_size) },
+          { text: processor(m) },
           { text: ago(m.last_used) }
         ]);
       }));
@@ -450,7 +440,6 @@
     drawModelBars("chart-wait", "Average wait before first word", models, avgWait, function (m) { return dur(avgWait(m)); },
       function (m) { return [dur(avgWait(m)) + " average wait", full(m.requests) + " requests"]; }, empty, true);
     drawTimeChart(models);
-    drawTimeTable(models);
     drawCost(models, label);
 
     $("models-hint").hidden = !!models.length;

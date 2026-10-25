@@ -104,7 +104,6 @@
           <li><i style="background: var(--series-3)"></i>Writing answer</li>
         </ul>
         <div id="chart-time"></div>
-        <div class="table-wrap" style="margin-top: 12px"><table id="time-table"></table></div>
       </section>
 
       <section class="card full">
@@ -121,9 +120,11 @@
       </section>
 
       <section class="card full" id="last-card">
-        <h2>Last request</h2>
-        <p class="hint">Each model's most recent answer, next to its all-time average</p>
-        <div class="table-wrap"><table id="last-table"></table></div>
+        <details class="collapse">
+          <summary>Last request</summary>
+          <p class="hint">Each model's most recent answer, next to its all-time average. Useful for checking whether one slow answer was unusual.</p>
+          <div class="table-wrap"><table id="last-table"></table></div>
+        </details>
       </section>
     </div>
 
