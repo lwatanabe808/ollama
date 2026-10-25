@@ -82,7 +82,6 @@ a, .link-btn, .tag-link { color: var(--accent); }
 .card h2 { font-size: 14px; font-weight: 600; margin: 0; }
 .card .hint { color: var(--text-muted); font-size: 13px; margin: 2px 0 14px; }
 .full { margin-bottom: 12px; }
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 
 .segmented { display: inline-flex; padding: 3px; border-radius: 9px; background: var(--surface); border: 1px solid var(--border); }
 .segmented button { font: inherit; color: var(--text-secondary); background: none; border: 0; cursor: pointer; padding: 6px 14px; border-radius: 6px; }
@@ -188,5 +187,4 @@ footer { color: var(--text-muted); font-size: 12px; margin-top: 20px; }
 @media (max-width: 860px) {
   .tiles { grid-template-columns: 1fr 1fr; }
   .tile.hero { grid-column: 1 / -1; }
-  .grid-2 { grid-template-columns: 1fr; }
 }

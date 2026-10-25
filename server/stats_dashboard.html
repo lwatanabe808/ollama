@@ -97,22 +97,15 @@
         <p class="tags-more" id="tags-more"></p>
       </section>
 
-      <section class="grid-2">
-        <div class="card">
-          <h2>Average speed by model</h2>
-          <p class="hint">Tokens written per second (tok/s): total tokens written ÷ total time spent writing, across this model's requests. Doesn't include loading the model or reading the prompt. Higher is faster.</p>
-          <div id="chart-speed"></div>
-        </div>
-        <div class="card">
-          <h2>Average wait before first word</h2>
-          <p class="hint">Average seconds until the answer starts. Lower is better.</p>
-          <div id="chart-wait"></div>
-        </div>
+      <section class="card full">
+        <h2>Average speed by model</h2>
+        <p class="hint">Tokens written per second (tok/s): total tokens written ÷ total time spent writing, across this model's requests. Doesn't include loading the model or reading the prompt. Higher is faster.</p>
+        <div id="chart-speed"></div>
       </section>
 
       <section class="card full" id="time-card">
         <h2>Where the time goes</h2>
-        <p class="hint">Average seconds per request, split into loading the model, reading the prompt, and writing the answer</p>
+        <p class="hint">Average seconds per request, split into loading the model, reading the prompt, and writing the answer. Loading plus reading is the wait before the first word.</p>
         <ul class="legend" aria-hidden="true">
           <li><i style="background: var(--series-1)"></i>Loading model</li>
           <li><i style="background: var(--series-2)"></i>Reading prompt</li>
