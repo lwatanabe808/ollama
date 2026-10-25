@@ -295,7 +295,7 @@
 
   function drawModelsTable(models) {
     fillTable($("models-table"),
-      ["Model", "Requests", "Errors", "Avg first word", "Avg speed", "Avg time", "Total tokens in", "Newly read", "Reused", "Total tokens out", "Max context", "Memory needed", "Processor", "Last used"],
+      ["Model", "Requests", "Errors", "Avg first word", "Writing speed", "Time to finish", "Total tokens in", "Newly read", "Reused", "Total tokens out", "Max context", "Memory needed", "Processor", "Last used"],
       models.map(function (m) {
         // Reused tokens came from earlier work instead of being read again.
         var share = reused(m.prompt_cached_tokens, m.prompt_tokens);
@@ -345,7 +345,7 @@
   function drawLastTable(models) {
     var withLast = models.filter(function (m) { return m.last; });
     $("last-card").hidden = !withLast.length;
-    fillTable($("last-table"), ["Model", "When", "First word", "Speed", "Time", "Tokens in / out", "Context"],
+    fillTable($("last-table"), ["Model", "When", "First word", "Writing speed", "Time to finish", "Tokens in / out", "Context"],
       withLast.map(function (m) {
         var l = m.last, n = ok(m);
         return row([
@@ -390,7 +390,7 @@
   }
 
   function drawLogTable(entries) {
-    fillTable($("log-table"), ["Time", "Model", "First word", "Speed", "Time taken", "Load / read / write", "Total in", "Newly read", "Reused", "Out", "Status"],
+    fillTable($("log-table"), ["Time", "Model", "First word", "Writing speed", "Time to finish", "Load / read / write", "Total in", "Newly read", "Reused", "Out", "Status"],
       entries.map(function (e) {
         var tr = row([
           { text: when(e.at, true) },
@@ -471,7 +471,7 @@
 
     var empty = "No requests " + label + " yet.";
     if (showDays) drawDays(st);
-    drawModelBars("chart-speed", "Average speed by model", models, tps, function (m) { return tps(m).toFixed(1) + " tok/s"; },
+    drawModelBars("chart-speed", "Writing speed by model", models, tps, function (m) { return tps(m).toFixed(1) + " tok/s"; },
       function (m) { return [tps(m).toFixed(1) + " tokens per second", full(m.output_tokens) + " tokens written"]; }, empty);
     drawTimeChart(models);
     drawCost(models, label);

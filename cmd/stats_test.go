@@ -57,7 +57,7 @@ func TestRenderStats(t *testing.T) {
 		"1 request running now",
 		"TODAY",
 		"ALL TIME",
-		"MODEL", "AVG FIRST WORD", "AVG SPEED", "AVG TIME", "TOTAL TOKENS IN", "NEWLY READ", "REUSED", "TOTAL TOKENS OUT", "MAX CONTEXT", "MEMORY NEEDED", "LAST USED",
+		"MODEL", "AVG FIRST WORD", "WRITING SPEED", "TIME TO FINISH", "TOTAL TOKENS IN", "NEWLY READ", "REUSED", "TOTAL TOKENS OUT", "MAX CONTEXT", "MEMORY NEEDED", "LAST USED",
 		"llama3.2:latest",
 		"48.0 tok/s",      // 4800 tokens / 100s
 		"11.1s",           // 122s over 11 successful requests

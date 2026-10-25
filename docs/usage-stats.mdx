@@ -20,8 +20,8 @@ This prints, for each model:
 
 - **Requests** and **errors**
 - **Avg first word**: the wait before an answer starts, including loading the model and reading the prompt
-- **Avg speed**: total tokens written ÷ total time spent writing. Loading and reading the prompt aren't included.
-- **Avg time**: the whole request, start to finish
+- **Writing speed**: tokens written per second, averaged as total tokens written ÷ total time spent writing. Loading and reading the prompt aren't included.
+- **Time to finish**: the average time for the whole request, start to finish. It depends mostly on how long the answer is.
 - **Total tokens in**, split into **newly read** and **reused** (parts of a chat Ollama had already processed), and **total tokens out**
 - **Max context**: the fullest any one request got, compared to the context window it ran in
 - **Memory needed**: memory the model used at its last request, even if it's no longer loaded

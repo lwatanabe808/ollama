@@ -169,7 +169,7 @@ func renderTagLog(w io.Writer, log *api.StatsLogResponse) {
 			status,
 		})
 	}
-	renderTable(w, []string{"TIME", "MODEL", "FIRST WORD", "SPEED", "TIME TAKEN", "LOAD / READ / WRITE", "TOTAL IN", "NEWLY READ", "REUSED", "OUT", "STATUS"}, data)
+	renderTable(w, []string{"TIME", "MODEL", "FIRST WORD", "WRITING SPEED", "TIME TO FINISH", "LOAD / READ / WRITE", "TOTAL IN", "NEWLY READ", "REUSED", "OUT", "STATUS"}, data)
 
 	if shown := len(log.Requests); shown < log.Total {
 		fmt.Fprintf(w, "\nShowing the newest %d of %d. Use --limit to see more.\n", shown, log.Total)
@@ -264,7 +264,7 @@ func renderStatsTable(w io.Writer, models []api.ModelStats) {
 		})
 	}
 
-	renderTable(w, []string{"MODEL", "REQUESTS", "ERRORS", "AVG FIRST WORD", "AVG SPEED", "AVG TIME", "TOTAL TOKENS IN", "NEWLY READ", "REUSED", "TOTAL TOKENS OUT", "MAX CONTEXT", "MEMORY NEEDED", "LAST USED"}, data)
+	renderTable(w, []string{"MODEL", "REQUESTS", "ERRORS", "AVG FIRST WORD", "WRITING SPEED", "TIME TO FINISH", "TOTAL TOKENS IN", "NEWLY READ", "REUSED", "TOTAL TOKENS OUT", "MAX CONTEXT", "MEMORY NEEDED", "LAST USED"}, data)
 }
 
 // renderTimeBreakdown splits each model's average request time into
@@ -386,7 +386,7 @@ func renderLastRequests(w io.Writer, models []api.ModelStats) {
 	}
 
 	fmt.Fprintf(w, "\nLAST REQUEST (compared to all-time average)\n")
-	renderTable(w, []string{"MODEL", "WHEN", "FIRST WORD", "SPEED", "TIME", "TOKENS IN/OUT", "CONTEXT"}, data)
+	renderTable(w, []string{"MODEL", "WHEN", "FIRST WORD", "WRITING SPEED", "TIME TO FINISH", "TOKENS IN/OUT", "CONTEXT"}, data)
 }
 
 // statsContextWarnAt is how full the context window has to get before we warn.
