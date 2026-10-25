@@ -223,36 +223,50 @@
     { key: "output_duration", name: "Writing answer", cls: "seg-3" }
   ];
 
-  // Stacked bars: loading, reading, writing. A 2px gap separates segments.
+  // timeParts splits a model's average request time into the parts drawn
+  // in its bar. Cloud models don't report loading or reading time, and
+  // their total includes the trip over the network, so the time that isn't
+  // writing is shown as waiting on the network. That way every bar adds up
+  // to the model's real average time.
+  function timeParts(m) {
+    var parts = TIME_PARTS.map(function (p) { return { name: p.name, cls: p.cls, v: avgOf(m, m[p.key]) }; });
+    if (m.cloud) {
+      var known = parts.reduce(function (s, p) { return s + p.v; }, 0);
+      parts.unshift({ name: "Waiting on the network", cls: "seg-4", v: Math.max(0, avgTime(m) - known) });
+    }
+    return parts.filter(function (p) { return p.v > 0; });
+  }
+  function partsTotal(m) { return timeParts(m).reduce(function (s, p) { return s + p.v; }, 0); }
+
+  // Stacked bars, shortest total on top. A 2px gap separates segments.
   function drawTimeChart(models) {
     var box = $("chart-time");
-    var rows = models.filter(function (m) { return avgTime(m) > 0; }).sort(function (a, b) { return avgTime(b) - avgTime(a); });
+    var rows = models.filter(function (m) { return partsTotal(m) > 0; }).sort(function (a, b) { return partsTotal(a) - partsTotal(b); });
+    $("legend-network").hidden = !rows.some(function (m) { return m.cloud; });
     if (!rows.length) { box.replaceChildren(el("p", { class: "hint" }, "No finished requests yet.")); return; }
 
     var W = Math.max(box.clientWidth, 260), rowH = 34, bh = 18, gap = 2;
     var nameW = Math.min(170, Math.max(90, W * 0.3)), valueW = 60;
     var plotW = W - nameW - valueW, H = rows.length * rowH;
-    var max = Math.max.apply(null, rows.map(function (m) {
-      return TIME_PARTS.reduce(function (sum, p) { return sum + avgOf(m, m[p.key]); }, 0);
-    }));
+    var max = Math.max.apply(null, rows.map(partsTotal));
     var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, height: H, role: "img",
-      "aria-label": "Average time per request by model, split into loading, reading, and writing. " + rows.map(function (m) {
-        return m.model + ": " + TIME_PARTS.map(function (p) { return p.name.toLowerCase() + " " + dur(avgOf(m, m[p.key])); }).join(", ");
+      "aria-label": "Average time per request by model, shortest first. " + rows.map(function (m) {
+        return m.model + ": " + timeParts(m).map(function (p) { return p.name.toLowerCase() + " " + dur(p.v); }).join(", ");
       }).join("; ") });
     svg.appendChild(svgEl("line", { x1: nameW, x2: nameW, y1: 0, y2: H, stroke: "var(--baseline)", "stroke-width": 1 }));
     rows.forEach(function (m, i) {
       var y = i * rowH, cy = y + rowH / 2, x = nameW, sum = 0;
       svg.appendChild(svgEl("text", { class: "name", x: 0, y: cy + 4 }, truncate(m.model, 22)));
-      var visible = TIME_PARTS.filter(function (p) { return avgOf(m, m[p.key]) > 0; });
+      var visible = timeParts(m);
       visible.forEach(function (p, j) {
-        var v = avgOf(m, m[p.key]), isLast = j === visible.length - 1;
-        sum += v;
-        var w = Math.max(1, v / max * plotW - (isLast ? 0 : gap));
+        var isLast = j === visible.length - 1;
+        sum += p.v;
+        var w = Math.max(1, p.v / max * plotW - (isLast ? 0 : gap));
         var hit = svgEl("rect", { class: "hit", x: x, y: y, width: w + gap, height: rowH });
         var seg = isLast
           ? svgEl("path", { class: "seg " + p.cls, d: barPath(x, cy - bh / 2, w, bh, true) })
           : svgEl("rect", { class: "seg " + p.cls, x: x, y: cy - bh / 2, width: w, height: bh });
-        hover(hit, seg, m.model, [p.name + ": " + dur(v) + " average"]);
+        hover(hit, seg, m.model, [p.name + ": " + dur(p.v) + " average"]);
         svg.appendChild(hit);
         svg.appendChild(seg);
         x += w + (isLast ? 0 : gap);

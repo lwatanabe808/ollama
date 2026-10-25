@@ -14,6 +14,7 @@
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
+  --series-4: #a3a29b;
   --good: #006300;
   --warning-ink: #8a5a00;
   --critical: #c22f2f;
@@ -39,6 +40,7 @@
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
+    --series-4: #6b6a65;
     --good: #0ca30c;
     --warning-ink: #fab219;
     --critical: #e66767;
@@ -116,7 +118,7 @@ svg .name { fill: var(--text-primary); font-size: 12px; }
 .chart-bar, .seg, svg text { pointer-events: none; }
 .chart-bar { fill: var(--series-1); }
 .chart-bar.hover { fill: color-mix(in srgb, var(--series-1) 80%, var(--text-primary)); }
-.seg-1 { fill: var(--series-1); } .seg-2 { fill: var(--series-2); } .seg-3 { fill: var(--series-3); }
+.seg-1 { fill: var(--series-1); } .seg-2 { fill: var(--series-2); } .seg-3 { fill: var(--series-3); } .seg-4 { fill: var(--series-4); }
 .seg.hover { opacity: 0.8; }
 .hit { fill: transparent; }
 .legend, .score-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0; list-style: none; color: var(--text-secondary); font-size: 12px; }
