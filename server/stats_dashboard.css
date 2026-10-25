@@ -97,7 +97,7 @@ a, .link-btn, .tag-link { color: var(--accent); }
 .tags-more { color: var(--text-muted); font-size: 12px; margin-top: 10px; }
 .field-error { color: var(--critical); font-size: 12px; min-height: 16px; margin-top: 4px; }
 
-.tiles { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.tiles { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 .tile .label, .cost .label { color: var(--text-secondary); font-size: 13px; }
 .tile .value, .cost .value { font-size: 28px; font-weight: 600; margin-top: 6px; letter-spacing: -0.01em; }
 .tile.hero .value { font-size: 48px; line-height: 1.05; }

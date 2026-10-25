@@ -295,7 +295,7 @@
 
   function drawModelsTable(models) {
     fillTable($("models-table"),
-      ["Model", "Requests", "Errors", "Avg first word", "Avg speed", "Avg time", "Total tokens in", "Reused", "Total tokens out", "Max context", "Memory needed", "Processor", "Last used"],
+      ["Model", "Requests", "Errors", "Avg first word", "Avg speed", "Avg time", "Total tokens in", "Newly read", "Reused", "Total tokens out", "Max context", "Memory needed", "Processor", "Last used"],
       models.map(function (m) {
         // Reused tokens came from earlier work instead of being read again.
         var share = reused(m.prompt_cached_tokens, m.prompt_tokens);
@@ -307,6 +307,7 @@
           { text: speedText(m.output_tokens, m.output_duration) },
           { text: dur(avgTime(m)) },
           { text: compact(m.prompt_tokens) },
+          { text: compact(newRead(m.prompt_tokens, m.prompt_cached_tokens)) },
           { text: m.prompt_cached_tokens ? compact(m.prompt_cached_tokens) + " (" + pct(share) + ")" : "0" },
           { text: compact(m.output_tokens) },
           { text: contextText(m) },
@@ -453,12 +454,16 @@
     $("live-dot").classList.toggle("on", st.active > 0);
     setStatus(st.active === 1 ? "1 request running" : st.active > 1 ? st.active + " requests running" : "Idle");
 
-    var tot = { requests: 0, errors: 0, tokens: 0 };
+    var tot = { requests: 0, errors: 0, tokens: 0, tokensIn: 0, reused: 0 };
     models.forEach(function (m) {
       tot.requests += m.requests; tot.errors += m.errors; tot.tokens += m.output_tokens;
+      tot.tokensIn += m.prompt_tokens; tot.reused += m.prompt_cached_tokens;
     });
     $("t-requests").textContent = full(tot.requests);
     $("t-requests-note").textContent = models.length + (models.length === 1 ? " model " : " models ") + label;
+    $("t-tokens-in").textContent = compact(tot.tokensIn);
+    $("t-tokens-in-note").textContent = tot.reused ? full(tot.reused) + " reused (" + pct(reused(tot.reused, tot.tokensIn)) + ")" :
+      tot.tokensIn >= 1000 ? full(tot.tokensIn) + " exactly" : "Across all models";
     $("t-tokens").textContent = compact(tot.tokens);
     $("t-tokens-note").textContent = tot.tokens >= 1000 ? full(tot.tokens) + " exactly" : "Across all models";
     $("t-errors").textContent = full(tot.errors);
