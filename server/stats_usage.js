@@ -72,13 +72,27 @@
 
   // ---------- cost estimate ----------
 
-  var prices = { input: 1, output: 4 };
+  // Claude's API prices per million tokens, as of October 2026. Sonnet is
+  // the default: Anthropic's everyday model.
+  var PRICE_PRESETS = {
+    "claude-sonnet": { name: "Claude Sonnet 5.5", input: 2, output: 10 },
+    "claude-opus": { name: "Claude Opus 5.5", input: 4, output: 20 },
+    "claude-haiku": { name: "Claude Haiku 5.5", input: 0.1, output: 0.5 }
+  };
+  var DEFAULT_PRESET = "claude-sonnet";
+  var prices = { preset: DEFAULT_PRESET, input: 2, output: 10 };
   try {
-    var savedPrices = JSON.parse(localStorage.getItem("ollama-stats-prices") || "null");
+    var savedPrices = JSON.parse(localStorage.getItem("ollama-stats-prices-v2") || "null");
     if (savedPrices && savedPrices.input >= 0 && savedPrices.output >= 0) prices = savedPrices;
   } catch (e) { /* storage blocked or bad value */ }
+  function presetFor(p) {
+    var preset = PRICE_PRESETS[p.preset];
+    return preset && preset.input === p.input && preset.output === p.output ? p.preset : "custom";
+  }
+  // Small amounts keep two significant digits, like $0.0084, so a light
+  // user sees a real number instead of $0.00.
   function money(x) {
-    if (x > 0 && x < 0.01) return "under $0.01";
+    if (x > 0 && x < 0.01) return "$" + x.toPrecision(2);
     return "$" + x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
@@ -252,8 +266,9 @@
     var tin = 0, tout = 0;
     models.forEach(function (m) { tin += m.prompt_tokens; tout += m.output_tokens; });
     $("cost-value").textContent = money(tin / 1e6 * prices.input + tout / 1e6 * prices.output);
+    var preset = PRICE_PRESETS[presetFor(prices)];
     $("cost-note").textContent = "Estimate for " + full(tin) + " tokens in and " + full(tout) + " tokens out " + label +
-      ". Running locally costs nothing per token. Prices are examples; enter the ones for the service you'd compare against.";
+      (preset ? ", at " + preset.name + " prices" : ", at your prices") + ". Running locally costs nothing per token.";
   }
 
   function contextText(m) {
@@ -517,8 +532,26 @@
     $("price-out").setAttribute("aria-invalid", String(badOut));
     if (badIn || badOut) { $("price-error").textContent = "Enter a price of 0 or more for both fields."; return; }
     $("price-error").textContent = "";
-    prices = { input: a, output: b };
-    try { localStorage.setItem("ollama-stats-prices", JSON.stringify(prices)); } catch (e) { /* storage blocked */ }
+    prices = { preset: $("price-preset").value, input: a, output: b };
+    prices.preset = presetFor(prices);
+    $("price-preset").value = prices.preset;
+    savePrices();
+  }
+
+  function onPresetChange() {
+    var preset = PRICE_PRESETS[$("price-preset").value];
+    if (!preset) return; // "Custom": keep the typed prices
+    prices = { preset: $("price-preset").value, input: preset.input, output: preset.output };
+    $("price-in").value = preset.input;
+    $("price-out").value = preset.output;
+    $("price-in").removeAttribute("aria-invalid");
+    $("price-out").removeAttribute("aria-invalid");
+    $("price-error").textContent = "";
+    savePrices();
+  }
+
+  function savePrices() {
+    try { localStorage.setItem("ollama-stats-prices-v2", JSON.stringify(prices)); } catch (e) { /* storage blocked */ }
     if (last) render(last);
   }
 
@@ -527,8 +560,10 @@
     document.querySelectorAll("#range-control button").forEach(function (b) {
       b.addEventListener("click", function () { setRange(b.dataset.range); });
     });
+    $("price-preset").value = presetFor(prices);
     $("price-in").value = prices.input;
     $("price-out").value = prices.output;
+    $("price-preset").addEventListener("change", onPresetChange);
     $("price-in").addEventListener("input", onPriceInput);
     $("price-out").addEventListener("input", onPriceInput);
     $("tag-search").addEventListener("input", function () {
