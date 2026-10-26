@@ -1821,7 +1821,7 @@ Requests can carry two headers:
 GET /api/stats
 ```
 
-Returns totals for each model, today and all time, plus daily totals for the last 31 days and the most recently used tags.
+Returns totals for each model, today and all time, plus daily totals for the last 31 days and the most recently used tags. `tags` covers the whole request log (90 days) with all-time counts; `today_tags` lists only the tags used today, with today's counts. Both list up to 100 tags, and the `_total` fields say how many there are.
 
 #### Request
 
@@ -1868,7 +1868,9 @@ curl http://localhost:11434/api/stats
   "active": 0,
   "days": [{ "date": "2026-10-22", "requests": 6, "errors": 0, "output_tokens": 330 }],
   "tags": [{ "tag": "cloud-test", "requests": 4, "errors": 0, "last_used": "2026-10-22T16:54:45-07:00" }],
-  "tags_total": 1
+  "tags_total": 1,
+  "today_tags": [],
+  "today_tags_total": 0
 }
 ```
 

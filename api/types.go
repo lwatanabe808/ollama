@@ -1159,6 +1159,11 @@ type StatsResponse struct {
 	// TagsTotal is how many different tags are in the log, which may be
 	// more than the number listed in Tags.
 	TagsTotal int `json:"tags_total"`
+	// TodayTags lists the tags used today, newest first, up to 100, with
+	// today's counts only.
+	TodayTags []TagStats `json:"today_tags"`
+	// TodayTagsTotal is how many different tags were used today.
+	TodayTagsTotal int `json:"today_tags_total"`
 	// Disabled is true when usage stats are turned off with OLLAMA_NOSTATS.
 	Disabled bool `json:"disabled,omitempty"`
 }

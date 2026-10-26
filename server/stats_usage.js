@@ -364,13 +364,17 @@
   // The tag list is only redrawn when it changes, so a keyboard user tabbing
   // through it doesn't lose their place every refresh.
   var tagsDrawn = "";
+  // The tag list follows the Today / All time switch: on Today it lists only
+  // the tags used today, with today's counts.
   function drawTags(st) {
-    var all = st.tags || [];
-    var total = Math.max(st.tags_total || 0, all.length);
+    var today = range === "today";
+    var all = (today ? st.today_tags : st.tags) || [];
+    var total = Math.max((today ? st.today_tags_total : st.tags_total) || 0, all.length);
+    $("tags-title").textContent = today ? "Tags used today" : "Tags";
     var q = $("tag-search").value.trim().toLowerCase();
     var matches = q ? all.filter(function (t) { return t.tag.toLowerCase().indexOf(q) !== -1; }) : all;
     var shown = matches.slice(0, TAGS_SHOWN);
-    var key = JSON.stringify([q, total, shown.map(function (t) { return [t.tag, t.requests, t.errors, ago(t.last_used)]; })]);
+    var key = JSON.stringify([range, q, total, shown.map(function (t) { return [t.tag, t.requests, t.errors, ago(t.last_used)]; })]);
     if (key === tagsDrawn) return;
     tagsDrawn = key;
 
@@ -383,7 +387,7 @@
     }));
 
     var more = $("tags-more");
-    if (!all.length) more.textContent = "No tags yet.";
+    if (!all.length) more.textContent = today ? "No tags used today." : "No tags yet.";
     else if (q && !matches.length) more.textContent = "No recent tags match. Press Enter to open \"" + $("tag-search").value.trim() + "\" anyway.";
     else if (q) more.textContent = matches.length > TAGS_SHOWN ? "Showing " + TAGS_SHOWN + " of " + matches.length + " matches. Keep typing to narrow it down." : "";
     else more.textContent = total > TAGS_SHOWN ? "Showing the " + TAGS_SHOWN + " most recent of " + full(total) + " tags. Search to find others." : "";

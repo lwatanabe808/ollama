@@ -556,3 +556,37 @@ func TestStatsTagListStaysInSync(t *testing.T) {
 	add("fresh", false, false)
 	checkTagsMatch(t, "after reset and a new request", &l)
 }
+
+// TestStatsTodayTags checks the Today view's tag list: only tags used today,
+// with today's counts, newest first, and no test requests.
+func TestStatsTodayTags(t *testing.T) {
+	now := time.Date(2026, 10, 25, 15, 0, 0, 0, time.Local)
+	u := newTestStats(t, &now)
+	u.record("m", api.Metrics{}, statsRequestInfo{Tag: "both"}, false)
+	u.record("m", api.Metrics{}, statsRequestInfo{Tag: "yesterday-only"}, false)
+
+	now = time.Date(2026, 10, 26, 9, 0, 0, 0, time.Local)
+	u.record("m", api.Metrics{}, statsRequestInfo{Tag: "both"}, true)
+	now = now.Add(time.Hour)
+	u.record("m", api.Metrics{}, statsRequestInfo{Tag: "today-only"}, false)
+	u.record("m", api.Metrics{}, statsRequestInfo{Tag: "a-test", Test: true}, false)
+	u.record("m", api.Metrics{}, statsRequestInfo{}, false) // untagged
+
+	st := u.snapshot()
+	var got []string
+	for _, tg := range st.TodayTags {
+		got = append(got, fmt.Sprintf("%s:%d/%d", tg.Tag, tg.Requests, tg.Errors))
+	}
+	if want := []string{"today-only:1/0", "both:1/1"}; strings.Join(got, " ") != strings.Join(want, " ") || st.TodayTagsTotal != 2 {
+		t.Errorf("today's tags = %v (total %d), want %v", got, st.TodayTagsTotal, want)
+	}
+	// The all-time list still has every tag, with all-time counts.
+	if st.TagsTotal != 3 {
+		t.Errorf("all-time tags = %d, want 3", st.TagsTotal)
+	}
+	for _, tg := range st.Tags {
+		if tg.Tag == "both" && tg.Requests != 2 {
+			t.Errorf("all-time count for both = %d, want 2", tg.Requests)
+		}
+	}
+}

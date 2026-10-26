@@ -315,7 +315,7 @@ func sortedStats(m map[string]*api.ModelStats) []api.ModelStats {
 
 func (u *usageStats) snapshot() api.StatsResponse {
 	if u == nil {
-		return api.StatsResponse{TodayModels: []api.ModelStats{}, AllTimeModels: []api.ModelStats{}, Days: []api.DayStats{}, Tags: []api.TagStats{}, Disabled: true}
+		return api.StatsResponse{TodayModels: []api.ModelStats{}, AllTimeModels: []api.ModelStats{}, Days: []api.DayStats{}, Tags: []api.TagStats{}, TodayTags: []api.TagStats{}, Disabled: true}
 	}
 
 	now := u.now()
@@ -336,6 +336,9 @@ func (u *usageStats) snapshot() api.StatsResponse {
 	tags := u.log.tags()
 	resp.TagsTotal = len(tags)
 	resp.Tags = tags[:min(len(tags), statsTagsListed)]
+	todayTags := u.log.tagsSince(time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()))
+	resp.TodayTagsTotal = len(todayTags)
+	resp.TodayTags = todayTags[:min(len(todayTags), statsTagsListed)]
 	return resp
 }
 

@@ -220,13 +220,46 @@ func (l *statsLog) tags() []api.TagStats {
 	for _, t := range l.byTag {
 		out = append(out, *t)
 	}
+	sortTags(out)
+	return out
+}
+
+// tagsSince summarizes the tags used since start, counting only those
+// requests. It reads the log from the newest entry back, so it only looks
+// at the requests since start.
+func (l *statsLog) tagsSince(start time.Time) []api.TagStats {
+	byTag := map[string]*api.TagStats{}
+	for i := len(l.entries) - 1; i >= 0 && !l.entries[i].At.Before(start); i-- {
+		e := l.entries[i]
+		if e.Tag == "" || e.Test {
+			continue
+		}
+		t, ok := byTag[e.Tag]
+		if !ok {
+			t = &api.TagStats{Tag: e.Tag, LastUsed: e.At}
+			byTag[e.Tag] = t
+		}
+		t.Requests++
+		if e.Error {
+			t.Errors++
+		}
+	}
+	out := make([]api.TagStats, 0, len(byTag))
+	for _, t := range byTag {
+		out = append(out, *t)
+	}
+	sortTags(out)
+	return out
+}
+
+// sortTags orders tags most recently used first, then by name.
+func sortTags(out []api.TagStats) {
 	sort.Slice(out, func(i, j int) bool {
 		if !out[i].LastUsed.Equal(out[j].LastUsed) {
 			return out[i].LastUsed.After(out[j].LastUsed)
 		}
 		return out[i].Tag < out[j].Tag
 	})
-	return out
 }
 
 // query returns the requests with the given tag (all requests when tag is
