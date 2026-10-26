@@ -94,29 +94,81 @@
     return fetch(url, { method: "POST", headers: headers || { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: signal })
       .then(readJSON);
   }
-  // timed sends a model request and notes how long it took from here, in
-  // nanoseconds. Cloud models don't report their own reading and writing
-  // times, so this is the time they're judged by.
-  function timed(url, body, signal) {
+  function isCloud(model) { return T.models.some(function (m) { return m.name === model && m.cloud; }); }
+
+  // sendTestRequest sends one model request with the test header and times
+  // it from here. The reply gets elapsed: the whole time, in nanoseconds.
+  //
+  // Cloud models don't report their reading and writing times, so their
+  // answers are asked for piece by piece. The reply then also gets wait
+  // (until the first piece of the answer) and writing (first piece to
+  // last), the same split local models report.
+  function sendTestRequest(url, body, signal) {
     var start = performance.now();
-    return postJSON(url, body, signal, TEST_HEADERS).then(function (r) {
-      r.elapsed = Math.round((performance.now() - start) * 1e6);
-      return r;
+    var ns = function (ms) { return Math.round(ms * 1e6); };
+    if (!body.stream) {
+      return postJSON(url, body, signal, TEST_HEADERS).then(function (r) {
+        r.elapsed = ns(performance.now() - start);
+        return r;
+      });
+    }
+    return fetch(url, { method: "POST", headers: TEST_HEADERS, body: JSON.stringify(body), signal: signal }).then(function (res) {
+      if (!res.ok) return readJSON(res);
+      return readPieces(res, function (first, last) {
+        return { elapsed: ns(last - start), wait: ns(first - start), writing: ns(last - first) };
+      });
     });
   }
+
+  // readPieces reads a streamed answer, one JSON object per line, and joins
+  // it into one reply shaped like a non-streamed one. timing gets the times
+  // the first piece of the answer and the last piece arrived.
+  function readPieces(res, timing) {
+    var reader = res.body.getReader(), decoder = new TextDecoder();
+    var buffered = "", content = "", thinking = "", final = null, first = null;
+    function handle(line) {
+      if (!line.trim()) return;
+      var p = JSON.parse(line);
+      if (p.error) { var e = new Error(p.error); e.status = 500; throw e; }
+      var text = (p.message ? (p.message.content || "") : (p.response || ""));
+      var thought = (p.message ? p.message.thinking : p.thinking) || "";
+      if (first === null && (text || thought)) first = performance.now();
+      content += text;
+      thinking += thought;
+      if (p.done) final = p;
+    }
+    function pump() {
+      return reader.read().then(function (chunk) {
+        if (!chunk.done) {
+          buffered += decoder.decode(chunk.value, { stream: true });
+          var lines = buffered.split("\n");
+          buffered = lines.pop();
+          lines.forEach(handle);
+          return pump();
+        }
+        handle(buffered);
+        var last = performance.now();
+        if (!final) { var e = new Error("the answer ended before it finished"); e.status = 500; throw e; }
+        if (final.message) { final.message.content = content; final.message.thinking = thinking; } else final.response = content;
+        return Object.assign(final, timing(first === null ? last : first, last));
+      });
+    }
+    return pump();
+  }
+
   function chat(model, messages, opts, signal) {
-    var body = { model: model, messages: messages, stream: false, options: Object.assign({}, SAMPLING, opts.options) };
+    var body = { model: model, messages: messages, stream: isCloud(model), options: Object.assign({}, SAMPLING, opts.options) };
     if (opts.tag) body.tag = opts.tag;
     if (opts.think !== undefined) body.think = opts.think;
     if (opts.format) body.format = opts.format;
-    return timed("/api/chat", body, signal);
+    return sendTestRequest("/api/chat", body, signal);
   }
   // Output scenarios continue a plain number list with no chat template, so
   // every model keeps writing until the token cap instead of stopping early.
   function generateRaw(model, prompt, opts, signal) {
-    var body = { model: model, prompt: prompt, raw: true, stream: false, options: Object.assign({}, SAMPLING, opts.options) };
+    var body = { model: model, prompt: prompt, raw: true, stream: isCloud(model), options: Object.assign({}, SAMPLING, opts.options) };
     if (opts.tag) body.tag = opts.tag;
-    return timed("/api/generate", body, signal);
+    return sendTestRequest("/api/generate", body, signal);
   }
 
   function stopped() { return new DOMException("Stopped", "AbortError"); }
@@ -149,7 +201,7 @@
   function metricsOf(r) {
     return {
       load: r.load_duration || 0, read: r.prompt_eval_duration || 0, write: r.eval_duration || 0, total: r.total_duration || 0,
-      elapsed: r.elapsed || 0,
+      elapsed: r.elapsed || 0, wait: r.wait || 0, writing: r.writing || 0,
       tokens_in: r.prompt_eval_count || 0, tokens_cached: r.prompt_eval_cached_count || 0, tokens_out: r.eval_count || 0
     };
   }
@@ -387,12 +439,15 @@
     if (r.skipped) return { main: "Skipped", sub: r.skipped, cls: "skip" };
     if (r.error) return { main: "Error", sub: truncate(r.error, 60), cls: "fail" };
     if (totalOnly(r)) {
-      // Cloud models only give the whole time, measured here, network
-      // included. It isn't the same measure as a local model's reading or
-      // writing time, so it's never marked fastest.
-      var what = metricOf(sc) === "reuse" ? pct(reused(r.tokens_cached, r.tokens_in)) + " reused · " :
-        metricOf(sc) === "write" || metricOf(sc) === "think" ? compact(r.tokens_out) + " tokens · " : "";
-      return { main: dur(r.elapsed || r.total), sub: what + "total time (cloud)" };
+      // Cloud models are timed from here, network included: the whole time,
+      // split into the wait before the first word and writing. That isn't
+      // the same measure as a local model's, so it's never marked fastest.
+      var parts = [];
+      if (metricOf(sc) === "reuse") parts.push(pct(reused(r.tokens_cached, r.tokens_in)) + " reused");
+      if (metricOf(sc) === "write" || metricOf(sc) === "think") parts.push(compact(r.tokens_out) + " tokens");
+      if (r.writing) parts.push("wait " + dur(r.wait), "writing " + dur(r.writing));
+      parts.push("cloud");
+      return { main: dur(r.elapsed || r.total), sub: parts.join(" · ") };
     }
     switch (metricOf(sc)) {
       case "load": return { main: dur(r.load), sub: "total " + dur(r.total), key: r.load };
@@ -407,7 +462,7 @@
   }
 
   // totalOnly is true for cloud results, which have no reading or writing
-  // time, only the total.
+  // time from the model, only times measured here.
   function totalOnly(r) { return !!r.cloud; }
 
   // Gives a results table fixed widths for its first columns; the model
@@ -459,7 +514,7 @@
       fixColumns(t, ["16%", "24%"]);
       box.appendChild(wrapTable(t));
     });
-    box.appendChild(el("p", { class: "hint", style: "margin-top: 12px" }, "Bold marks the fastest model for each scenario. Times are averages when a scenario ran more than once. Cloud models only report their total time, measured from this computer, so they're shown separately and never marked fastest."));
+    box.appendChild(el("p", { class: "hint", style: "margin-top: 12px" }, "Bold marks the fastest model for each scenario. Times are averages when a scenario ran more than once. Cloud models are timed from this computer, network included: the total time, split into the wait before the first word and writing. They're never marked fastest, since that isn't the same measure."));
   }
 
   // Score color bands for the fact check summary.
