@@ -62,6 +62,10 @@ type statsLog struct {
 	rewrite   bool                  // the file must be rewritten from entries
 	fileLines int                   // lines currently in the file
 
+	// saveOff is set when the file exists but couldn't be read in full, so
+	// it's never overwritten with only part of the log.
+	saveOff bool
+
 	// byTag keeps the tag list up to date as entries come and go, so
 	// building it doesn't mean reading the whole log on every request.
 	byTag map[string]*api.TagStats
@@ -123,7 +127,7 @@ func readLogLine(rd *bufio.Reader, max int) (line []byte, tooLong bool, err erro
 
 // loadStatsLog reads the log file. Lines it can't read are skipped (and
 // dropped the next time the file is rewritten), so one bad line never loses
-// the rest.
+// the rest. If the file itself can't be read, the log works in memory only.
 func loadStatsLog(path string, now time.Time) statsLog {
 	l := statsLog{path: path}
 
@@ -131,7 +135,8 @@ func loadStatsLog(path string, now time.Time) statsLog {
 	if errors.Is(err, os.ErrNotExist) {
 		return l
 	} else if err != nil {
-		slog.Warn("could not read usage stats log, starting fresh", "path", path, "error", err)
+		slog.Warn("could not read usage stats log; keeping it in memory only, so the file isn't overwritten", "path", path, "error", err)
+		l.saveOff = true
 		return l
 	}
 	defer f.Close()
@@ -151,7 +156,8 @@ func loadStatsLog(path string, now time.Time) statsLog {
 		}
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
-				slog.Warn("could not read all of the usage stats log", "path", path, "error", err)
+				slog.Warn("could not read all of the usage stats log; keeping it in memory only, so the file isn't overwritten", "path", path, "error", err)
+				l.saveOff = true
 			}
 			break
 		}
@@ -258,13 +264,12 @@ func (l *statsLog) query(tag string, limit int) api.StatsLogResponse {
 func (u *usageStats) saveLog() error {
 	u.mu.Lock()
 	l := &u.log
-	if !l.rewrite && len(l.pending) == 0 {
+	if l.saveOff || (!l.rewrite && len(l.pending) == 0) {
 		u.mu.Unlock()
 		return nil
 	}
 	rewrite := l.rewrite
-	pending := l.pending
-	lines := pending
+	lines := l.pending
 	if rewrite {
 		lines = slices.Clone(l.entries)
 	}
@@ -290,19 +295,13 @@ func (u *usageStats) saveLog() error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if err != nil {
-		// Try again on the next save. A rewrite writes every entry anyway,
-		// so its pending lines aren't needed; otherwise keep them, capped,
-		// so a disk that stays full can't make this list grow forever.
-		if rewrite {
-			l.rewrite = true
-		} else if l.rewrite {
-			l.pending = nil
-		} else {
-			l.pending = append(pending, l.pending...)
-			if over := len(l.pending) - statsLogMaxEntries; over > 0 {
-				l.pending = l.pending[over:]
-			}
-		}
+		// Rewrite the whole file on the next save. An append that failed
+		// partway may have left some lines in the file, and appending them
+		// again would duplicate them. The rewrite writes every entry
+		// (including the pending ones) through a temp file, so nothing is
+		// lost or repeated.
+		l.rewrite = true
+		l.pending = nil
 		return err
 	}
 	if rewrite {

@@ -126,10 +126,8 @@
 
   window.OllamaStats = {
     compact: compact,
-    oneDecimal: oneDecimal,
     full: full,
     truncate: truncate,
-    seconds: seconds,
     dur: dur,
     speedOf: speedOf,
     speedText: speedText,
@@ -145,10 +143,8 @@
     el: el,
     svgEl: svgEl,
     row: row,
-    headRow: headRow,
     fillTable: fillTable,
     wrapTable: wrapTable,
-    httpError: httpError,
     readJSON: readJSON,
     getJSON: getJSON
   };

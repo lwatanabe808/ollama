@@ -500,6 +500,10 @@
   // each gives up after a timeout, and refreshing pauses while the tab is
   // hidden. A refresh started for an older tag is ignored.
   var refreshTimer = null, refreshing = null;
+  // The page is only redrawn when the numbers change, or once a minute so
+  // times like "5 min ago" stay current. Redrawing every few seconds for
+  // nothing would also make a chart's hover tooltip flicker.
+  var drawnKey = "", drawnAt = 0, REDRAW_MS = 60000;
   function refresh() {
     clearTimeout(refreshTimer);
     if (refreshing) refreshing.abort();
@@ -514,6 +518,10 @@
       if (want !== tag) return;
       last = res[0];
       tagLog = res[1];
+      var key = JSON.stringify(res);
+      if (key === drawnKey && Date.now() - drawnAt < REDRAW_MS) return;
+      drawnKey = key;
+      drawnAt = Date.now();
       try {
         render(last);
       } catch (e) {
@@ -522,6 +530,7 @@
       }
     }, function (e) {
       if (ctl !== refreshing) return; // replaced by a newer refresh
+      drawnKey = ""; // redraw once Ollama answers again, to clear the error
       if (e.status) setStatus("Ollama returned an error: " + e.message, true);
       else setStatus("Can't reach Ollama. Is it running?", true);
     }).then(function () {
@@ -606,7 +615,12 @@
     });
     $("tag-clear").addEventListener("click", function () { setTag(""); });
     window.addEventListener("hashchange", function () { setTag(tagFromHash()); });
-    window.addEventListener("resize", function () { if (last) render(last); });
+    // Redraw once a resize settles, not on every pixel of the drag.
+    var resizeTimer = null;
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () { if (last) render(last); }, 150);
+    });
     document.addEventListener("visibilitychange", function () { if (!document.hidden) refresh(); });
 
     setRange(range);

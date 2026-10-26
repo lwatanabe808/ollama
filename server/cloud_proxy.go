@@ -227,6 +227,7 @@ func proxyCloudRequestWithPath(c *gin.Context, body []byte, path string, disable
 	// we should not enforce a short total timeout for long-lived responses.
 	resp, err := http.DefaultClient.Do(outReq)
 	if err != nil {
+		status = http.StatusBadGateway // the cloud couldn't be reached: counted as an error
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}

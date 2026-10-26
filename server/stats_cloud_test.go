@@ -40,7 +40,7 @@ func fakeCloud(t *testing.T, reply func(path string) (int, string)) {
 const (
 	cloudChatStream = `{"model":"m","message":{"role":"assistant","content":"Hel"},"done":false}
 {"model":"m","message":{"role":"assistant","content":"lo"},"done":false}
-{"model":"m","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","total_duration":900000000,"load_duration":500000000,"prompt_eval_count":12,"prompt_eval_duration":20000000,"eval_count":40,"eval_duration":400000000}
+{"model":"m","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","total_duration":3600000000000,"load_duration":500000000,"prompt_eval_count":12,"prompt_eval_duration":20000000,"eval_count":40,"eval_duration":400000000}
 `
 	cloudGenerateOnce = `{"model":"m","response":"Hi","done":true,"prompt_eval_count":5,"eval_count":8,"eval_duration":100000000}`
 )
@@ -99,9 +99,10 @@ func TestStatsCloudRequests(t *testing.T) {
 	if got.LoadDuration != 0 || got.MemorySize != 0 {
 		t.Errorf("loading and memory don't apply to cloud: load %v, memory %d", got.LoadDuration, got.MemorySize)
 	}
-	// Total time is measured here, not taken from the cloud's 900ms.
-	if got.Last == nil || got.Last.TotalDuration <= 0 || got.Last.TotalDuration > 5*time.Second {
-		t.Errorf("total time should be measured on this computer, got %+v", got.Last)
+	// Total time is measured here, not taken from the cloud, which says the
+	// chat took an hour.
+	if chat := s.stats.logQuery("compare", 10).Requests; len(chat) != 1 || chat[0].TotalDuration <= 0 || chat[0].TotalDuration > 5*time.Second {
+		t.Errorf("total time should be measured on this computer, got %+v", chat)
 	}
 
 	tagged := s.stats.logQuery("compare", 10)

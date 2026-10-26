@@ -179,7 +179,7 @@ func runStatsCommand(t *testing.T, handler http.HandlerFunc, args ...string) err
 	}
 }
 
-func TestStatsCommandPrintsOnce(t *testing.T) {
+func TestStatsCommandAsksServerOnce(t *testing.T) {
 	calls := 0
 	err := runStatsCommand(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/stats" {

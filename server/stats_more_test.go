@@ -88,7 +88,7 @@ func TestStatsSaveFailureRetries(t *testing.T) {
 	if err := u.save(); err == nil {
 		t.Fatal("saving to a read-only folder should fail")
 	}
-	// A reset while the disk is failing forces a full rewrite later.
+	// A second failed save keeps this request queued too.
 	u.record("m", api.Metrics{EvalCount: 3}, statsRequestInfo{Tag: "c"}, false)
 	if err := u.save(); err == nil {
 		t.Fatal("saving to a read-only folder should fail again")

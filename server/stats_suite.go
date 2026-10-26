@@ -50,9 +50,8 @@ const (
 	statsSuiteRunMaxModels = 32
 )
 
-// statsSuiteSections are the sections a saved run can name. "accuracy" is
-// the earlier name for fact checks, accepted so older runs still load.
-var statsSuiteSections = map[string]bool{"performance": true, "fact_checks": true, "accuracy": true}
+// statsSuiteSections are the sections a saved run can name.
+var statsSuiteSections = map[string]bool{"performance": true, "fact_checks": true}
 
 var (
 	statsSuiteNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
@@ -377,13 +376,15 @@ func statsSuiteRunsPath() (string, error) {
 }
 
 // readStatsSuiteRuns returns saved runs, oldest first, skipping bad lines.
-func readStatsSuiteRuns(path string) []statsSuiteRun {
+// A missing file is no runs. Any other read error is returned, so a save
+// never overwrites runs it couldn't read.
+func readStatsSuiteRuns(path string) ([]statsSuiteRun, error) {
 	bts, err := readSmallFile(path, (statsSuiteRunsKept+1)*statsSuiteRunMaxSize)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			slog.Warn("could not read saved test runs", "path", path, "error", err)
-		}
-		return nil
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	} else if err != nil {
+		slog.Warn("could not read saved test runs", "path", path, "error", err)
+		return nil, err
 	}
 	var runs []statsSuiteRun
 	for line := range bytes.SplitSeq(bts, []byte("\n")) {
@@ -395,7 +396,7 @@ func readStatsSuiteRuns(path string) []statsSuiteRun {
 			runs = append(runs, r)
 		}
 	}
-	return runs
+	return runs, nil
 }
 
 func (s *Server) StatsSuiteRunsHandler(c *gin.Context) {
@@ -405,8 +406,12 @@ func (s *Server) StatsSuiteRunsHandler(c *gin.Context) {
 		return
 	}
 	statsSuiteRunsMu.Lock()
-	runs := readStatsSuiteRuns(path)
+	runs, err := readStatsSuiteRuns(path)
 	statsSuiteRunsMu.Unlock()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "couldn't read saved test runs: " + err.Error()})
+		return
+	}
 
 	// Newest first.
 	out := make([]statsSuiteRun, 0, len(runs))
@@ -479,8 +484,13 @@ func (s *Server) SaveStatsSuiteRunHandler(c *gin.Context) {
 	statsSuiteRunsMu.Lock()
 	defer statsSuiteRunsMu.Unlock()
 
+	saved, err := readStatsSuiteRuns(path)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "couldn't read saved test runs, so this run wasn't saved over them: " + err.Error()})
+		return
+	}
 	// A run saved again under the same id replaces the earlier copy.
-	runs := slices.DeleteFunc(readStatsSuiteRuns(path), func(r statsSuiteRun) bool { return r.ID == run.ID })
+	runs := slices.DeleteFunc(saved, func(r statsSuiteRun) bool { return r.ID == run.ID })
 	runs = append(runs, run)
 	if len(runs) > statsSuiteRunsKept {
 		runs = runs[len(runs)-statsSuiteRunsKept:]

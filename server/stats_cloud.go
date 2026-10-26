@@ -156,11 +156,10 @@ func (m *cloudMeter) endLine() {
 func (m *cloudMeter) finish(c *gin.Context, status int) {
 	defer m.u.active.Add(-1)
 	m.endLine()
-	if c.Request.Context().Err() != nil || status == 0 || (status >= 400 && status < 500) {
-		return
-	}
 
-	if m.done && !m.failed && status < 300 {
+	// An answer that finished counts, even if the caller hung up right after
+	// reading the last piece.
+	if m.done && !m.failed && status > 0 && status < 300 {
 		metrics := m.metrics
 		if metrics.EvalDuration == 0 {
 			metrics.EvalDuration = m.writingTime()
@@ -168,6 +167,9 @@ func (m *cloudMeter) finish(c *gin.Context, status int) {
 		metrics.TotalDuration = time.Since(m.start)
 		metrics.LoadDuration = 0
 		m.u.record(m.model, metrics, m.info, false)
+		return
+	}
+	if c.Request.Context().Err() != nil || status == 0 || (status >= 400 && status < 500) {
 		return
 	}
 	m.u.record(m.model, api.Metrics{}, m.info, true)

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,10 +20,10 @@ func TestStatsSuiteBuiltInIsValid(t *testing.T) {
 		t.Fatalf("built-in suite is invalid: %v", err)
 	}
 	if len(s.Performance) == 0 || len(s.FactChecks) == 0 {
-		t.Fatalf("built-in suite should have both sections, got %d performance and %d accuracy", len(s.Performance), len(s.FactChecks))
+		t.Fatalf("built-in suite should have both sections, got %d performance and %d fact checks", len(s.Performance), len(s.FactChecks))
 	}
 
-	// Performance scenarios must not grade answers; that's what accuracy is for.
+	// Performance scenarios must not grade answers; that's what fact checks are for.
 	var raw struct {
 		Performance []map[string]any `json:"performance"`
 	}
@@ -131,7 +132,7 @@ func TestStatsSuiteRunsSaveAndList(t *testing.T) {
 		return w.Code
 	}
 	run := func(id string) string {
-		return `{"id":"` + id + `","suite":"basics","tag":"basics:` + id + `","models":["llama3.2"],"sections":["accuracy"],"results":[{"test":"a","pass":true}]}`
+		return `{"id":"` + id + `","suite":"basics","tag":"basics:` + id + `","models":["llama3.2"],"sections":["fact_checks"],"results":[{"test":"a","pass":true}]}`
 	}
 
 	if code := post(run("run-1"), "application/json"); code != http.StatusCreated {
@@ -152,8 +153,14 @@ func TestStatsSuiteRunsSaveAndList(t *testing.T) {
 		}
 	}
 
+	// Save 13 more runs: bulk-a through bulk-m. Only the newest 10 are kept.
+	var ids []string
 	for i := range statsSuiteRunsKept + 3 {
-		post(run("bulk-"+string(rune('a'+i%26))+strings.Repeat("x", i/26)), "application/json")
+		id := "bulk-" + string(rune('a'+i))
+		ids = append(ids, id)
+		if code := post(run(id), "application/json"); code != http.StatusCreated {
+			t.Fatalf("saving %s: status %d", id, code)
+		}
 	}
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/stats/suite-runs", nil))
@@ -163,10 +170,40 @@ func TestStatsSuiteRunsSaveAndList(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatal(err)
 	}
-	if len(resp.Runs) != statsSuiteRunsKept {
-		t.Errorf("kept %d runs, want the newest %d", len(resp.Runs), statsSuiteRunsKept)
+	var got []string
+	for _, r := range resp.Runs {
+		got = append(got, r.ID)
 	}
-	if resp.Runs[0].ID == "run-1" {
-		t.Error("runs should be newest first, and the oldest should have been dropped")
+	var want []string
+	for i := len(ids) - 1; i >= len(ids)-statsSuiteRunsKept; i-- {
+		want = append(want, ids[i])
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("runs = %v, want the newest %d, newest first: %v", got, statsSuiteRunsKept, want)
+	}
+
+	// Saving a run again under the same id replaces it, instead of adding a
+	// second copy.
+	again := strings.Replace(run("bulk-m"), `"llama3.2"`, `"gemma3"`, 1)
+	if code := post(again, "application/json"); code != http.StatusCreated {
+		t.Fatalf("saving bulk-m again: status %d", code)
+	}
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/stats/suite-runs", nil))
+	resp.Runs = nil
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	copies := 0
+	for _, r := range resp.Runs {
+		if r.ID == "bulk-m" {
+			copies++
+			if len(r.Models) != 1 || r.Models[0] != "gemma3" {
+				t.Errorf("bulk-m wasn't replaced: models %v", r.Models)
+			}
+		}
+	}
+	if copies != 1 || len(resp.Runs) != statsSuiteRunsKept {
+		t.Errorf("%d copies of bulk-m among %d runs, want 1 among %d", copies, len(resp.Runs), statsSuiteRunsKept)
 	}
 }

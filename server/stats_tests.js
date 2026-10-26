@@ -26,14 +26,14 @@
 
   var T = { suites: [], suite: null, models: [], runs: [], running: false, abort: null, shownRun: null, tab: "perf" };
 
-  // Result kinds saved with each run. "acc" is the earlier name for fact
-  // checks, still read so older runs load.
-  function isFact(r) { return r.kind === "fact" || r.kind === "acc"; }
-  // Older runs saved out of room as this text instead of a flag.
-  function outOfRoom(r) { return !r.pass && (r.out_of_room || r.got === "(ran out of room before answering)"); }
-  function runHas(run, section) {
-    return run.sections.indexOf(section) !== -1 || (section === "fact_checks" && run.sections.indexOf("accuracy") !== -1);
-  }
+  // The server's limits for a saved run (stats_suite.go), checked here so a
+  // long run isn't lost at the end.
+  var MAX_MODELS = 32;
+  var MAX_SAVE_BYTES = 2 * 1024 * 1024;
+
+  function isFact(r) { return r.kind === "fact"; }
+  function outOfRoom(r) { return !r.pass && !!r.out_of_room; }
+  function runHas(run, section) { return run.sections.indexOf(section) !== -1; }
 
   // ---------- prompts for performance scenarios ----------
 
@@ -285,6 +285,7 @@
     var doPerf = $("run-perf").checked && suite.performance.length > 0;
     var doFacts = $("run-facts").checked && suite.fact_checks.length > 0;
     if (!models.length) { $("run-error").textContent = "Pick at least one model."; return; }
+    if (models.length > MAX_MODELS) { $("run-error").textContent = "Pick " + MAX_MODELS + " models or fewer."; return; }
     if (!doPerf && !doFacts) { $("run-error").textContent = "Pick Performance, Fact checks, or both."; return; }
     $("run-error").textContent = "";
     try { localStorage.setItem("ollama-tests-models", JSON.stringify(models)); } catch (e) { /* storage blocked */ }
@@ -292,7 +293,8 @@
     var now = new Date();
     var stamp = now.getFullYear() + String(now.getMonth() + 1).padStart(2, "0") + String(now.getDate()).padStart(2, "0") +
       "-" + String(now.getHours()).padStart(2, "0") + String(now.getMinutes()).padStart(2, "0") + String(now.getSeconds()).padStart(2, "0");
-    var id = "run-" + stamp;
+    // A short random part keeps two runs started in the same second apart.
+    var id = "run-" + stamp + "-" + Math.floor(Math.random() * 65536).toString(16).padStart(4, "0");
     var ctl = new AbortController();
     var ctx = { tag: suite.name + ":" + id, signal: ctl.signal, repeats: Number($("repeats").value) || 1, loadedWindow: {}, fillerSizes: {} };
     var run = { id: id, suite: suite.name, tag: ctx.tag, started_at: now.toISOString(), models: models,
@@ -326,23 +328,44 @@
       }).then(function () { i++; return next(); });
     }
 
-    next().catch(function (err) {
-      if (err && err.name === "AbortError") run.cancelled = true;
-      else { run.cancelled = true; $("run-error").textContent = "The run stopped early: can't reach Ollama. Is it still running?"; }
+    // Each stage catches its own errors, so the Run button always comes
+    // back, even if something fails unexpectedly.
+    Promise.resolve().then(next).catch(function (err) {
+      run.cancelled = true;
+      if (!err || err.name !== "AbortError") $("run-error").textContent = "The run stopped early: can't reach Ollama. Is it still running?";
     }).then(function () {
       run.finished_at = new Date().toISOString();
       setProgress(i, steps.length, run.cancelled ? "Stopped after " + i + " of " + steps.length + "." : "Done. " + steps.length + " steps finished.");
-      return postJSON("/api/stats/suite-runs", run).then(function () { return null; }, function (e) {
-        // Keep the results on screen even when they can't be saved.
-        run.unsaved = true;
-        $("run-error").textContent = "These results couldn't be saved (" + e.message + "). They'll be gone when you leave this page.";
-        return run;
-      });
+      return saveRun(run);
+    }).catch(function (e) {
+      console.error(e);
+      return keepUnsaved(run, e.message);
     }).then(function (unsaved) {
       T.running = false; T.abort = null;
       $("run-btn").disabled = false; $("stop-btn").hidden = true;
       return loadRuns(run.id, unsaved);
+    }).catch(function (e) { console.error(e); });
+  }
+
+  // saveRun saves a finished run. A run over the server's size limit keeps
+  // only the start of each free-form answer, so its scores still save.
+  // Returns null when saved, or the run when it's kept on screen unsaved.
+  function saveRun(run) {
+    var size = function () { return new Blob([JSON.stringify(run)]).size; };
+    if (size() > MAX_SAVE_BYTES) {
+      run.results.forEach(function (r) { if (r.answer) r.answer = truncate(r.answer, 120); });
+    }
+    if (size() > MAX_SAVE_BYTES) return Promise.resolve(keepUnsaved(run, "the run is larger than 2 MB"));
+    return postJSON("/api/stats/suite-runs", run).then(function () { return null; }, function (e) {
+      return keepUnsaved(run, e.message);
     });
+  }
+
+  // keepUnsaved keeps a run's results on screen when they can't be saved.
+  function keepUnsaved(run, why) {
+    run.unsaved = true;
+    $("run-error").textContent = "These results couldn't be saved (" + why + "). They'll be gone when you leave this page.";
+    return run;
   }
 
   // ---------- results ----------
@@ -383,10 +406,9 @@
     }
   }
 
-  // totalOnly is true for results with no reading or writing time: cloud
-  // models. Runs saved before cloud results were flagged are spotted by the
-  // missing times.
-  function totalOnly(r) { return r.cloud || (!r.load && !r.read && !r.write && r.total > 0); }
+  // totalOnly is true for cloud results, which have no reading or writing
+  // time, only the total.
+  function totalOnly(r) { return !!r.cloud; }
 
   // Gives a results table fixed widths for its first columns; the model
   // columns split what's left evenly.

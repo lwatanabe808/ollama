@@ -55,6 +55,10 @@ type usageStats struct {
 	now    func() time.Time
 	active atomic.Int64
 
+	// saveOff is set when the totals file exists but couldn't be read, so
+	// it's never overwritten with fresh totals.
+	saveOff bool
+
 	mu    sync.Mutex // guards data, dirty, and log
 	data  statsFile
 	dirty bool
@@ -78,7 +82,9 @@ func defaultStatsPath() (string, error) {
 }
 
 // newUsageStats loads saved totals from path. A missing file starts fresh.
-// A file that can't be read is moved aside so it is not overwritten.
+// A damaged file is moved aside so it isn't overwritten. A file that can't
+// be read at all (say, no permission) is left alone: stats still work in
+// memory, but the totals aren't saved, so the old file is never replaced.
 func newUsageStats(path string) *usageStats {
 	u := &usageStats{path: path, now: time.Now, stop: make(chan struct{})}
 	u.data = newStatsFile(u.now())
@@ -89,7 +95,8 @@ func newUsageStats(path string) *usageStats {
 	case errors.Is(err, os.ErrNotExist):
 		return u
 	case err != nil:
-		slog.Warn("could not read usage stats, starting fresh", "path", path, "error", err)
+		slog.Warn("could not read usage stats; keeping them in memory only, so the file isn't overwritten", "path", path, "error", err)
+		u.saveOff = true
 		return u
 	}
 
@@ -382,6 +389,9 @@ func (u *usageStats) save() error {
 
 // saveTotals writes the totals if anything changed since the last save.
 func (u *usageStats) saveTotals() error {
+	if u.saveOff {
+		return nil
+	}
 	u.mu.Lock()
 	if !u.dirty {
 		u.mu.Unlock()
@@ -473,7 +483,8 @@ func (u *usageStats) close() error {
 // (Done) or an error goes by.
 //
 // Only requests that reach the model are seen here. Requests rejected before
-// that (unknown model, bad request) and cloud requests aren't counted.
+// that (unknown model, bad request) aren't counted. Cloud requests don't go
+// through here; the cloud meter in stats_cloud.go counts them.
 func (u *usageStats) observe(ctx context.Context, model string, info statsRequestInfo, in chan any) chan any {
 	if u == nil {
 		return in
@@ -598,7 +609,9 @@ func (s *Server) ResetStatsHandler(c *gin.Context) {
 		return
 	}
 	if err := s.stats.reset(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// The stats are already cleared in memory; only saving failed, and
+		// it's tried again on the next save.
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "stats were reset, but couldn't be saved yet: " + err.Error()})
 		return
 	}
 	c.Status(http.StatusOK)

@@ -1069,13 +1069,7 @@ func (m ModelStats) TokensPerSecond() float64 {
 
 // AvgWait is the average time before the first word of an answer appeared.
 // It covers loading the model and reading the prompt: everything except writing.
-func (m ModelStats) AvgWait() time.Duration {
-	ok := m.Requests - m.Errors
-	if ok <= 0 || m.TotalDuration <= m.OutputDuration {
-		return 0
-	}
-	return (m.TotalDuration - m.OutputDuration) / time.Duration(ok)
-}
+func (m ModelStats) AvgWait() time.Duration { return m.avg(m.TotalDuration - m.OutputDuration) }
 
 // AvgLoad is the average time spent loading the model before a request
 // could start. It is near zero when the model was already in memory.
