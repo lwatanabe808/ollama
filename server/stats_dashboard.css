@@ -166,7 +166,12 @@ legend { font-weight: 600; font-size: 13px; margin-bottom: 8px; padding: 0; }
 .progress-track { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
 .progress-track i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 4px; transition: width 200ms; }
 .progress p { color: var(--text-secondary); font-size: 13px; margin: 8px 0 0; }
-.results-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.results-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+/* The Performance / Fact checks switch is the main control for reading
+   results, so it's larger and the chosen side is filled in. */
+.results-tabs button { font-size: 15px; font-weight: 600; padding: 9px 22px; }
+.results-tabs button[aria-pressed="true"] { background: var(--accent-strong); color: #fff; box-shadow: none; }
+.run-select { margin-bottom: 4px; }
 .group-title { font-size: 13px; font-weight: 600; margin: 20px 0 4px; }
 td details summary { cursor: pointer; list-style: none; }
 td details summary::-webkit-details-marker { display: none; }

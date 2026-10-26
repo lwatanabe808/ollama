@@ -190,13 +190,13 @@
     <section class="card full" id="results-card" hidden>
       <div class="results-head">
         <h2>Results</h2>
-        <select class="select" id="run-select" aria-label="Saved test runs"></select>
+        <div class="segmented results-tabs" id="results-tabs" role="group" aria-label="Show results for">
+          <button type="button" data-tab="perf" aria-pressed="true">Performance</button>
+          <button type="button" data-tab="facts" aria-pressed="false">Fact checks</button>
+        </div>
       </div>
+      <select class="select run-select" id="run-select" aria-label="Saved test runs"></select>
       <p class="hint" id="run-meta"></p>
-      <div class="segmented" id="results-tabs" role="group" aria-label="Result type">
-        <button type="button" data-tab="perf" aria-pressed="true">Performance</button>
-        <button type="button" data-tab="facts" aria-pressed="false">Fact checks</button>
-      </div>
       <div id="perf-results"></div>
       <div id="facts-results" hidden></div>
     </section>
