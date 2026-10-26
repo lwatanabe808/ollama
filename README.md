@@ -1,3 +1,97 @@
+# Usage stats for Ollama
+
+> This fork adds usage stats and a model test suite to Ollama. The changes are on the `usage-stats` branch: [see the full diff](https://github.com/lwatanabe808/ollama/compare/main...usage-stats). Ollama's original README follows below.
+
+Ollama runs models well, but it doesn't show how they perform over time, or help you compare them. This adds:
+
+- **`ollama stats`**: per-model totals in the terminal, for today and all time.
+- **A dashboard** at `/stats` (`ollama stats --web`): requests per day, writing speed, where the time goes (loading, reading, writing), tokens in and out, memory, and a cost estimate at Claude or OpenAI prices.
+- **Tags**: group requests (`ollama run --tag`, a `tag` field, or an `X-Ollama-Tag` header) and look them up later with `ollama stats --tag`.
+- **A test suite** at `/stats/tests`: performance scenarios that change one thing at a time, and fact checks graded exactly through structured output.
+- **Cloud models** are counted too, timed from your computer, so local and cloud can be compared side by side.
+
+Only counts and timings are saved, never prompts or answers. Turn it off with `OLLAMA_NOSTATS=1`.
+
+## Screenshots
+
+| Usage, top | Usage, models and last request |
+|---|---|
+| ![Usage page: totals, cost estimate, requests per day](docs/images/usage-stats/1-usage-top.png) | ![Usage page: models table and last request](docs/images/usage-stats/2-usage-bottom.png) |
+
+| Test performance | Fact check scores | Every test |
+|---|---|---|
+| ![Performance scenarios across five models](docs/images/usage-stats/3-test-performance.png) | ![Fact check scores by category](docs/images/usage-stats/4-fact-check-scores.png) | ![Pass or fail for every fact check](docs/images/usage-stats/5-every-test.png) |
+
+## Try it
+
+You need Go, as in [Ollama's development guide](docs/development.md). If the Ollama app is running, quit it first, since it uses the same port.
+
+```shell
+git clone -b usage-stats https://github.com/lwatanabe808/ollama.git
+cd ollama
+go build .
+./ollama serve
+```
+
+In a second terminal, from the same folder:
+
+```shell
+./ollama run llama3.2 "Explain how clouds form" --tag demo
+./ollama stats
+./ollama stats --tag demo
+./ollama stats --web
+```
+
+Then open the **Tests** tab on the dashboard, pick a few models, and click **Run tests**.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Chat request] --> B[Request handler<br/>reads the tag and test marker]
+    B --> C[Model writes the answer]
+    C --> D[Stats meter<br/>watches the answer go by]
+    D --> E[record<br/>adds it up]
+    E --> F[(In memory<br/>totals and request log)]
+    F -->|every minute and on shutdown| G[(Files in ~/.ollama)]
+    F --> H[Stats API<br/>/api/stats, /api/stats/log]
+    H --> I[ollama stats]
+    H --> J[Dashboard]
+    J -.->|test requests| A
+```
+
+1. **A request comes in.** The chat and generate handlers read the request's tag and whether it's a test (`X-Ollama-Stats: test`).
+2. **The stats meter** (`observe`) sits on the channel the answer flows through. It passes every piece through unchanged and, on the last piece, records the model's own timings. A request you stop partway isn't counted. Cloud requests get the same treatment from a meter on the pass-through to Ollama's servers, timed on your computer since the cloud doesn't report writing time.
+3. **`record`** adds the request to a log in memory and, unless it's a test, to each model's totals for today and all time.
+4. **Every minute and on shutdown,** totals go to `~/.ollama/stats.json` and new log lines to `~/.ollama/stats-log.jsonl`. Files are written safely, and a damaged file is set aside instead of stopping Ollama.
+5. **The API** hands out copies of the numbers, which the terminal and the dashboard display.
+6. **The Tests page** is a client like any other app. It sends test-marked requests through the normal chat API, grades fact checks in the browser, and saves results to `~/.ollama/stats-suite-runs.jsonl`.
+
+| File | What it does |
+|---|---|
+| `server/stats.go` | The stats meter, totals, saving, and the stats API |
+| `server/stats_cloud.go` | Metering cloud requests |
+| `server/stats_log.go` | The request log and tags |
+| `server/stats_suite.go` | Test suites and saved test runs |
+| `server/stats_suite_basics.json` | The built-in test suite |
+| `server/stats_dashboard.html`, `.css`, `stats_*.js` | The dashboard |
+| `cmd/stats.go` | The `ollama stats` command |
+
+## Tests
+
+```shell
+go test ./server ./cmd -run 'Stats|Usage|Cloud|Tag|Render|Dashboard|Run'
+```
+
+They cover the totals and their math, saving and failed saves, damaged files, tags, the test marker, the OpenAI and Anthropic style endpoints, cloud metering against a fake cloud server, stopped requests, the CLI, and the grading rules (run with Node, skipped if Node isn't installed).
+
+## More
+
+- [Usage stats guide](docs/usage-stats.mdx): everything the feature tracks, and how to use it
+- [API reference](docs/api.md#usage-stats): the new endpoints
+
+---
+
 <p align="center">
   <a href="https://ollama.com">
     <img src="https://github.com/ollama/ollama/assets/3325447/0d0b44e2-8f4a-4e99-9b52-a5c1c741c8f7" alt="ollama" width="200"/>
