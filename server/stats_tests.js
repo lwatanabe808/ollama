@@ -96,22 +96,20 @@
   }
   function isCloud(model) { return T.models.some(function (m) { return m.name === model && m.cloud; }); }
 
-  // sendTestRequest sends one model request with the test header and times
-  // it from here. The reply gets elapsed: the whole time, in nanoseconds.
+  // sendTestRequest sends one model request with the test header.
   //
-  // Cloud models don't report their reading and writing times, so their
-  // answers are asked for piece by piece. The reply then also gets wait
-  // (until the first piece of the answer) and writing (first piece to
-  // last), the same split local models report.
+  // Local models get a plain request: their replies already include
+  // Ollama's own loading, reading, and writing times.
+  //
+  // Cloud models don't report reading and writing times, so their answers
+  // are asked for piece by piece (body.stream) and timed here. The reply
+  // gets elapsed (the whole time), wait (until the first piece of the
+  // answer), and writing (first piece to last), in nanoseconds.
   function sendTestRequest(url, body, signal) {
+    if (!body.stream) return postJSON(url, body, signal, TEST_HEADERS);
+
     var start = performance.now();
     var ns = function (ms) { return Math.round(ms * 1e6); };
-    if (!body.stream) {
-      return postJSON(url, body, signal, TEST_HEADERS).then(function (r) {
-        r.elapsed = ns(performance.now() - start);
-        return r;
-      });
-    }
     return fetch(url, { method: "POST", headers: TEST_HEADERS, body: JSON.stringify(body), signal: signal }).then(function (res) {
       if (!res.ok) return readJSON(res);
       return readPieces(res, function (first, last) {
