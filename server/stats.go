@@ -81,23 +81,29 @@ func defaultStatsPath() (string, error) {
 	return filepath.Join(home, ".ollama", "stats.json"), nil
 }
 
-// newUsageStats loads saved totals from path. A missing file starts fresh.
-// A damaged file is moved aside so it isn't overwritten. A file that can't
-// be read at all (say, no permission) is left alone: stats still work in
-// memory, but the totals aren't saved, so the old file is never replaced.
+// newUsageStats loads the saved request log (stats-log.jsonl) and totals
+// (stats.json) into memory.
 func newUsageStats(path string) *usageStats {
 	u := &usageStats{path: path, now: time.Now, stop: make(chan struct{})}
-	u.data = newStatsFile(u.now())
 	u.log = loadStatsLog(statsLogPath(path), u.now())
+	u.data, u.saveOff = loadStatsTotals(path, u.now())
+	u.pruneDaysLocked(u.now())
+	return u
+}
 
+// loadStatsTotals reads the saved totals from path. A missing file starts
+// fresh. A damaged file is moved aside so it isn't overwritten. A file that
+// can't be read at all (say, no permission) is left alone and saveOff is
+// true: stats still work in memory, but the totals aren't saved, so the old
+// file is never replaced.
+func loadStatsTotals(path string, now time.Time) (data statsFile, saveOff bool) {
 	bts, err := os.ReadFile(path)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
-		return u
+		return newStatsFile(now), false
 	case err != nil:
 		slog.Warn("could not read usage stats; keeping them in memory only, so the file isn't overwritten", "path", path, "error", err)
-		u.saveOff = true
-		return u
+		return newStatsFile(now), true
 	}
 
 	var loaded statsFile
@@ -105,12 +111,9 @@ func newUsageStats(path string) *usageStats {
 		bad := path + ".corrupt"
 		slog.Warn("usage stats file is not valid, moving it aside and starting fresh", "path", path, "moved_to", bad, "error", err)
 		_ = os.Rename(path, bad)
-		return u
+		return newStatsFile(now), false
 	}
-
-	u.data = cleanStatsFile(loaded)
-	u.pruneDaysLocked(u.now())
-	return u
+	return cleanStatsFile(loaded), false
 }
 
 // cleanStatsFile drops empty entries a hand-edited or damaged file could
